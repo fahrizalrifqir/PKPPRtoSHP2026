@@ -160,45 +160,110 @@ def display_shapefile_table(gdf, title):
     if gdf is None or gdf.empty:
         return
     
-    st.write(f"**Tabel Data {title}**")
-    
-    # Tampilkan jumlah fitur dan kolom
-    st.caption(f"{len(gdf)} fitur, {len(gdf.columns)} kolom")
-    
-    # Konversi geometry ke string untuk display
-    display_df = gdf.copy()
-    if 'geometry' in display_df.columns:
-        def format_geometry(geom):
-            if geom is None:
-                return None
-            geom_type = geom.geom_type
-            if geom_type == 'Point':
-                return f"Point ({geom.x:.6f}, {geom.y:.6f})"
-            elif geom_type == 'LineString':
-                return f"LineString ({len(geom.coords)} titik)"
-            elif geom_type == 'Polygon':
-                # Polygon tidak punya coords langsung, ambil dari exterior
-                return f"Polygon ({len(geom.exterior.coords)} titik exterior)"
-            elif geom_type == 'MultiPolygon':
-                total_points = sum(len(poly.exterior.coords) for poly in geom.geoms)
-                return f"MultiPolygon ({len(geom.geoms)} polygon, {total_points} titik)"
-            else:
-                return geom_type
+    # Buat container untuk tabel dengan styling
+    with st.container():
+        st.write(f"**Tabel Data {title}**")
         
-        display_df['geometry'] = display_df['geometry'].apply(format_geometry)
-    
-    # Tampilkan dataframe
-    st.dataframe(display_df, use_container_width=True, height=300)
-    
-    # Tombol download CSV
-    csv = display_df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label=f"📥 Download CSV {title}",
-        data=csv,
-        file_name=f"{title.replace(' ', '_')}_data.csv",
-        mime="text/csv",
-        key=f"csv_{title}"
+        # Tampilkan jumlah fitur dan kolom
+        st.caption(f"{len(gdf)} fitur, {len(gdf.columns)} kolom")
+        
+        # Konversi geometry ke string untuk display
+        display_df = gdf.copy()
+        if 'geometry' in display_df.columns:
+            def format_geometry(geom):
+                if geom is None:
+                    return None
+                geom_type = geom.geom_type
+                if geom_type == 'Point':
+                    return f"Point ({geom.x:.6f}, {geom.y:.6f})"
+                elif geom_type == 'LineString':
+                    return f"LineString ({len(geom.coords)} titik)"
+                elif geom_type == 'Polygon':
+                    # Polygon tidak punya coords langsung, ambil dari exterior
+                    return f"Polygon ({len(geom.exterior.coords)} titik exterior)"
+                elif geom_type == 'MultiPolygon':
+                    total_points = sum(len(poly.exterior.coords) for poly in geom.geoms)
+                    return f"MultiPolygon ({len(geom.geoms)} polygon, {total_points} titik)"
+                else:
+                    return geom_type
+            
+            display_df['geometry'] = display_df['geometry'].apply(format_geometry)
+        
+        # Tampilkan dataframe
+        st.dataframe(display_df, use_container_width=True, height=300)
+        
+        # Tombol download CSV
+        csv = display_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label=f"📥 Download CSV {title}",
+            data=csv,
+            file_name=f"{title.replace(' ', '_')}_data.csv",
+            mime="text/csv",
+            key=f"csv_{title}"
+        )
+
+# ======================
+# CONTOH PENGGUNAAN DI APLIKASI UTAMA
+# ======================
+# Di bagian upload (misalnya di main.py atau app.py):
+
+import streamlit as st
+import pandas as pd
+import geopandas as gpd
+
+# Judul aplikasi
+st.title("PKKPR → Shapefile Converter & Overlay Tapak Proyek")
+
+# Bagian upload di sebelah kiri
+st.write("## Upload Dokumen PKKPR (PDF atau SHP ZIP)")
+
+# Gunakan kolom untuk tata letak
+col1, col2 = st.columns([1, 1])  # Dua kolom dengan lebar sama
+
+with col1:
+    # Area upload file
+    uploaded_file = st.file_uploader(
+        "Drag and drop file here",
+        type=["pdf", "zip"],
+        help="Limit 200MB per file - PDF, ZIP",
+        key="uploader"
     )
+    
+    if uploaded_file is not None:
+        st.write(f"**File terupload:** {uploaded_file.name} ({uploaded_file.size / 1024:.1f}KB)")
+    
+    # Contoh file yang sudah diupload (dari contoh Anda)
+    st.write("---")
+    st.write("**Contoh file yang sudah diupload:**")
+    st.write("amdal_tapak_68c1363dd39cc_1499e118-0ef4-f6fe-b400-c5cd4438689a.zip  53.3KB")
+
+# Di sini Anda akan memproses file dan mendapatkan GeoDataFrame
+# Untuk contoh, kita buat GeoDataFrame dummy
+data = {
+    'OBJECTID_1': [0],
+    'PEMRAKARSA': ['PT Jhonlin Batu Mandiri'],
+    'KEGIATAN': ['Perkebunan Tebu'],
+    'TAHUN': [2025],
+    'PROVINSI': ['Sulawesi Tenggara'],
+    'KETERANGAN': ['None']
+}
+
+# Membuat GeoDataFrame dummy dengan geometry
+import geopandas as gpd
+from shapely.geometry import Polygon
+
+# Contoh geometry polygon
+geometry = [Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])]
+gdf = gpd.GeoDataFrame(data, geometry=geometry)
+
+# Tampilkan tabel di kolom kanan
+with col2:
+    # Panggil fungsi display_shapefile_table
+    display_shapefile_table(gdf, "PKKPR")
+    
+    # Informasi tambahan (misalnya luas)
+    st.write("---")
+    st.write("**Lurus UTM 51S:** 122.768.345.27 m²")
 
 # ======================
 # UNIVERSAL PDF PARSER
