@@ -153,6 +153,40 @@ def dms_to_decimal(dms_str):
     return val
 
 # ======================
+# TAMPILKAN TABEL DATA SHP
+# ======================
+def display_shapefile_table(gdf, title):
+    """Menampilkan tabel data atribut dari GeoDataFrame"""
+    if gdf is None or gdf.empty:
+        return
+    
+    st.write(f"**Tabel Data {title}**")
+    
+    # Tampilkan jumlah fitur dan kolom
+    st.caption(f"{len(gdf)} fitur, {len(gdf.columns)} kolom")
+    
+    # Konversi geometry ke string untuk display
+    display_df = gdf.copy()
+    if 'geometry' in display_df.columns:
+        display_df['geometry'] = display_df['geometry'].apply(
+            lambda x: f"{x.geom_type} ({len(list(x.coords)) if hasattr(x, 'coords') else 'N/A'} titik)" 
+            if x else None
+        )
+    
+    # Tampilkan dataframe
+    st.dataframe(display_df, use_container_width=True, height=300)
+    
+    # Tombol download CSV
+    csv = display_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label=f"📥 Download CSV {title}",
+        data=csv,
+        file_name=f"{title.replace(' ', '_')}_data.csv",
+        mime="text/csv",
+        key=f"csv_{title}"
+    )
+
+# ======================
 # UNIVERSAL PDF PARSER
 # ======================
 def extract_tables_and_coords_from_pdf(uploaded_file):
@@ -281,7 +315,7 @@ with col2:
                 pts = [Point(x, y) for x, y in coords]
                 gdf_points = gpd.GeoDataFrame(geometry=pts, crs="EPSG:4326")
 
-                # --- PERBAIKAN DAN PENCIPTAAN POLYGON DENGAN BEBERAPA STRATEGI ---
+                # --- PERBAIKAN DAN PENCIPTAAN POLYGON DENGAN BEBERAPI STRATEGI ---
                 # Siapkan koordinat (salin agar tidak mengubah coords asli)
                 coords_proc = coords.copy()
                 # Jika koordinat bukan hasil pembacaan tabel bernomor, urutkan searah jarum jam
@@ -350,22 +384,32 @@ with col2:
                     st.warning("Koordinat terbaca, tetapi polygon tidak valid — hanya titik disimpan. Dicoba metode: " + (", ".join(tried) if tried else "tidak ada"))
             else:
                 st.warning("Tidak ada koordinat ditemukan dalam PDF.")
-        if uploaded_tapak and gdf_polygon is not None:
-    with tempfile.TemporaryDirectory() as tmp:
-        zf = zipfile.ZipFile(io.BytesIO(uploaded_tapak.read()))
-        zf.extractall(tmp)
-        for root, _, files in os.walk(tmp):
-            for f in files:
-                if f.lower().endswith(".shp"):
-                    try:
-                        gdf_tapak = gpd.read_file(os.path.join(root, f))
-                        break
-                    except Exception as e_shp2:
-                        if DEBUG:
-                            st.write("Gagal membaca shapefile tapak:", e_shp2)
-    if gdf_tapak is not None:
-        gdf_tapak = fix_geometry(gdf_tapak)
-        st.success("Tapak berhasil dimuat ✅")
+        elif uploaded.name.lower().endswith(".zip"):
+            with tempfile.TemporaryDirectory() as tmp:
+                zf = zipfile.ZipFile(io.BytesIO(uploaded.read()))
+                zf.extractall(tmp)
+                for root, _, files in os.walk(tmp):
+                    for f in files:
+                        if f.lower().endswith(".shp"):
+                            try:
+                                gdf_polygon = gpd.read_file(os.path.join(root, f))
+                                break
+                            except Exception as e_shp:
+                                if DEBUG:
+                                    st.write("Gagal membaca shapefile:", e_shp)
+            if gdf_polygon is not None:
+                gdf_polygon = fix_geometry(gdf_polygon)
+                st.success("Shapefile PKKPR berhasil dimuat ✅")
+                
+                # Tampilkan tabel data untuk shapefile PKKPR
+                display_shapefile_table(gdf_polygon, "PKKPR")
+                
+                # Jika ada points, tampilkan juga
+                if gdf_points is not None and not gdf_points.empty:
+                    display_shapefile_table(gdf_points, "PKKPR Points")
+            else:
+                st.warning("ZIP tidak berisi shapefile yang valid.")
+
 # ======================
 # ANALISIS LUAS
 # ======================
@@ -405,6 +449,9 @@ if uploaded_tapak and gdf_polygon is not None:
     if gdf_tapak is not None:
         gdf_tapak = fix_geometry(gdf_tapak)
         st.success("Tapak berhasil dimuat ✅")
+        
+        # Tampilkan tabel data untuk shapefile Tapak
+        display_shapefile_table(gdf_tapak, "Tapak Proyek")
 
 # ======================
 # ANALISIS OVERLAY
@@ -457,9 +504,6 @@ if gdf_polygon is not None:
 # =====================================================
 # Layout PNG — tombol download + legenda (pojok kanan atas)
 # =====================================================
-import matplotlib.patches as mpatches
-import matplotlib.lines as mlines
-
 if gdf_polygon is not None:
     try:
         # Pastikan polygon dalam CRS WebMercator untuk contextily
