@@ -168,10 +168,24 @@ def display_shapefile_table(gdf, title):
     # Konversi geometry ke string untuk display
     display_df = gdf.copy()
     if 'geometry' in display_df.columns:
-        display_df['geometry'] = display_df['geometry'].apply(
-            lambda x: f"{x.geom_type} ({len(list(x.coords)) if hasattr(x, 'coords') else 'N/A'} titik)" 
-            if x else None
-        )
+        def format_geometry(geom):
+            if geom is None:
+                return None
+            geom_type = geom.geom_type
+            if geom_type == 'Point':
+                return f"Point ({geom.x:.6f}, {geom.y:.6f})"
+            elif geom_type == 'LineString':
+                return f"LineString ({len(geom.coords)} titik)"
+            elif geom_type == 'Polygon':
+                # Polygon tidak punya coords langsung, ambil dari exterior
+                return f"Polygon ({len(geom.exterior.coords)} titik exterior)"
+            elif geom_type == 'MultiPolygon':
+                total_points = sum(len(poly.exterior.coords) for poly in geom.geoms)
+                return f"MultiPolygon ({len(geom.geoms)} polygon, {total_points} titik)"
+            else:
+                return geom_type
+        
+        display_df['geometry'] = display_df['geometry'].apply(format_geometry)
     
     # Tampilkan dataframe
     st.dataframe(display_df, use_container_width=True, height=300)
