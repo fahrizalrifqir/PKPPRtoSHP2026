@@ -1,4 +1,4 @@
-# full_streamlit_pkkpr.py (optimized)
+# full_streamlit_pkkpr.py (fixed - no caching on GeoDataFrame)
 import streamlit as st
 import geopandas as gpd
 import pandas as pd
@@ -47,9 +47,8 @@ DEBUG = st.sidebar.checkbox("Tampilkan debug logs", value=False)
 INDO_BOUNDS = (95.0, 141.0, -11.0, 6.0)
 
 # ======================
-# HELPERS dengan CACHING
+# HELPERS TANPA CACHING UNTUK YANG KOMPLEKS
 # ======================
-@st.cache_data(ttl=3600)
 def format_angka_id(value):
     try:
         val = float(value)
@@ -62,14 +61,12 @@ def format_angka_id(value):
     except:
         return str(value)
 
-@st.cache_data(ttl=3600)
 def get_utm_info(lon, lat):
     zone = int((lon + 180) / 6) + 1
     epsg = 32600 + zone if lat >= 0 else 32700 + zone
     zone_label = f"{zone}{'N' if lat >= 0 else 'S'}"
     return epsg, zone_label
 
-@st.cache_data(ttl=3600)
 def parse_luas_line(line):
     if not line:
         return None
@@ -85,8 +82,8 @@ def parse_luas_line(line):
         return m2.group(1)
     return None
 
-@st.cache_data(ttl=3600)
 def save_shapefile_layers(gdf_poly, gdf_points):
+    """TIDAK DI-CACHE - mengandung GeoDataFrame"""
     with tempfile.TemporaryDirectory() as tmpdir:
         if gdf_poly is not None and not gdf_poly.empty:
             gdf_poly.to_crs(epsg=4326).to_file(os.path.join(tmpdir, "PKKPR_Polygon.shp"))
@@ -99,8 +96,8 @@ def save_shapefile_layers(gdf_poly, gdf_points):
         buf.seek(0)
         return buf.read()
 
-@st.cache_data(ttl=3600)
 def fix_geometry(gdf):
+    """TIDAK DI-CACHE - mengandung GeoDataFrame"""
     if gdf is None or gdf.empty:
         return gdf
     gdf["geometry"] = gdf["geometry"].apply(make_valid)
@@ -114,14 +111,12 @@ def fix_geometry(gdf):
     gdf["geometry"] = gdf["geometry"].apply(extract_valid)
     return gdf
 
-@st.cache_data(ttl=3600)
 def try_parse_float(s):
     try:
         return float(str(s).strip().replace(",", "."))
     except:
         return None
 
-@st.cache_data(ttl=3600)
 def dms_to_decimal(dms_str):
     if not dms_str or not isinstance(dms_str, str):
         return None
@@ -194,18 +189,18 @@ def display_shapefile_table(gdf, title):
             data=csv,
             file_name=f"{title.replace(' ', '_')}_data.csv",
             mime="text/csv",
-            key=f"csv_{title}_{hash(str(gdf.geometry.iloc[0])) if not gdf.empty else 'empty'}"
+            key=f"csv_{title}"
         )
 
 # ======================
-# UNIVERSAL PDF PARSER dengan CACHING
+# UNIVERSAL PDF PARSER
 # ======================
-@st.cache_data(ttl=3600, show_spinner=False)
 def extract_tables_and_coords_from_pdf(uploaded_file):
+    """TIDAK DI-CACHE - mengandung file object"""
     coords_plain = []
     text_all = ""
     ordered_from_table = False
-
+    
     with pdfplumber.open(uploaded_file) as pdf:
         for page in pdf.pages:
             text_all += (page.extract_text() or "") + "\n"
@@ -281,7 +276,6 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
 # ======================
 # AUTO SORT KOORDINAT
 # ======================
-@st.cache_data(ttl=3600)
 def sort_coords_clockwise(coords):
     if not coords:
         return coords
@@ -351,8 +345,8 @@ def process_pkkpr_file(uploaded):
                 poly_candidate = None
             
             if poly_candidate is not None and getattr(poly_candidate, "is_valid", False) and getattr(poly_candidate, "area", 0) > 0:
-                st.session_state.gdf_polygon = gpd.GeoDataFrame(geometry=[poly_candidate], crs="EPSG:4326")
-                st.session_state.gdf_polygon = fix_geometry(st.session_state.gdf_polygon)
+                gdf = gpd.GeoDataFrame(geometry=[poly_candidate], crs="EPSG:4326")
+                st.session_state.gdf_polygon = fix_geometry(gdf)
                 return f"Berhasil mengekstrak {len(coords)} titik dan membentuk polygon ✅ (metode: {', '.join(tried)})", True
             else:
                 st.session_state.gdf_polygon = None
@@ -368,11 +362,12 @@ def process_pkkpr_file(uploaded):
                 for f in files:
                     if f.lower().endswith(".shp"):
                         try:
-                            st.session_state.gdf_polygon = gpd.read_file(os.path.join(root, f))
-                            st.session_state.gdf_polygon = fix_geometry(st.session_state.gdf_polygon)
+                            gdf = gpd.read_file(os.path.join(root, f))
+                            st.session_state.gdf_polygon = fix_geometry(gdf)
                             return "Shapefile PKKPR berhasil dimuat ✅", True
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            if DEBUG:
+                                st.write(f"Error membaca shapefile: {e}")
         return "ZIP tidak berisi shapefile yang valid.", False
 
 def process_tapak_file(uploaded_tapak):
@@ -384,11 +379,12 @@ def process_tapak_file(uploaded_tapak):
             for f in files:
                 if f.lower().endswith(".shp"):
                     try:
-                        st.session_state.gdf_tapak = gpd.read_file(os.path.join(root, f))
-                        st.session_state.gdf_tapak = fix_geometry(st.session_state.gdf_tapak)
+                        gdf = gpd.read_file(os.path.join(root, f))
+                        st.session_state.gdf_tapak = fix_geometry(gdf)
                         return True
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        if DEBUG:
+                            st.write(f"Error membaca shapefile tapak: {e}")
     return False
 
 # ======================
@@ -408,7 +404,7 @@ with col1:
 with col2:
     st.write("Parser membaca tabel koordinat (Bujur/Lintang, Longitude/Latitude, atau X/Y).")
 
-# Tombol untuk memproses file
+# Proses file saat di-upload
 if uploaded and (st.session_state.uploaded_file_name != uploaded.name):
     with st.spinner("Memproses file PKKPR..."):
         result_msg, success = process_pkkpr_file(uploaded)
@@ -434,11 +430,16 @@ if st.session_state.gdf_polygon is not None:
     luas_utm = st.session_state.gdf_polygon.to_crs(epsg=utm_epsg).area.sum()
     luas_merc = st.session_state.gdf_polygon.to_crs(epsg=3857).area.sum()
 
-    st.write(f"Luas UTM {utm_zone}: {format_angka_id(luas_utm)} m²")
-    st.write(f"Luas Mercator: {format_angka_id(luas_merc)} m²")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Luas UTM", f"{format_angka_id(luas_utm)} m²", f"Zona {utm_zone}")
+    with col2:
+        st.metric("Luas Mercator", f"{format_angka_id(luas_merc)} m²")
+    
     if st.session_state.luas_pkkpr_doc:
-        st.write(f"Luas dokumen: {st.session_state.luas_pkkpr_doc}")
+        st.info(f"Luas dari dokumen: {st.session_state.luas_pkkpr_doc}")
 
+    # Buat dan download shapefile
     zip_bytes = save_shapefile_layers(st.session_state.gdf_polygon, st.session_state.gdf_points)
     st.download_button(
         "⬇️ Download SHP PKKPR", 
@@ -458,7 +459,7 @@ uploaded_tapak = st.file_uploader(
     key="tapak_uploader"
 )
 
-# Tombol untuk memproses tapak
+# Proses tapak saat di-upload
 if uploaded_tapak and (st.session_state.uploaded_tapak_name != uploaded_tapak.name):
     with st.spinner("Memproses file tapak..."):
         success = process_tapak_file(uploaded_tapak)
@@ -486,16 +487,23 @@ if st.session_state.gdf_polygon is not None and st.session_state.gdf_tapak is no
     try:
         inter = gpd.overlay(gdf_tapak_utm, gdf_pkkpr_utm, how="intersection")
         luas_overlap = inter.area.sum()
-    except Exception:
+    except Exception as e:
         luas_overlap = 0
+        if DEBUG:
+            st.write(f"Overlay gagal: {e}")
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Luas Tapak", f"{format_angka_id(luas_tapak)} m²")
+        st.metric("Luas Tapak", f"{format_angka_id(luas_tapak)} m²", f"UTM {utm_zone}")
     with col2:
-        st.metric("Di dalam PKKPR", f"{format_angka_id(luas_overlap)} m²")
+        persen_dalam = (luas_overlap/luas_tapak*100) if luas_tapak > 0 else 0
+        st.metric("Di dalam PKKPR", f"{format_angka_id(luas_overlap)} m²", 
+                 f"{format_angka_id(persen_dalam)}%")
     with col3:
-        st.metric("Di luar PKKPR", f"{format_angka_id(luas_tapak - luas_overlap)} m²")
+        luas_luar = luas_tapak - luas_overlap
+        persen_luar = (luas_luar/luas_tapak*100) if luas_tapak > 0 else 0
+        st.metric("Di luar PKKPR", f"{format_angka_id(luas_luar)} m²",
+                 f"{format_angka_id(persen_luar)}%")
 
 # ======================
 # PREVIEW PETA
@@ -503,158 +511,179 @@ if st.session_state.gdf_polygon is not None and st.session_state.gdf_tapak is no
 if st.session_state.gdf_polygon is not None:
     st.subheader("🌍 Preview Peta Interaktif")
     
-    # Gunakan cached map creation
-    @st.cache_data(ttl=600, show_spinner=False)
-    def create_map(gdf_polygon, gdf_points, gdf_tapak):
-        centroid = gdf_polygon.to_crs(epsg=4326).geometry.centroid.iloc[0]
+    def create_map():
+        """Fungsi untuk membuat peta"""
+        centroid = st.session_state.gdf_polygon.to_crs(epsg=4326).geometry.centroid.iloc[0]
         m = folium.Map(location=[centroid.y, centroid.x], zoom_start=17, tiles=None)
         Fullscreen(position="bottomleft").add_to(m)
         folium.TileLayer("openstreetmap").add_to(m)
         folium.TileLayer("CartoDB Positron").add_to(m)
         folium.TileLayer(xyz.Esri.WorldImagery).add_to(m)
-        folium.GeoJson(gdf_polygon.to_crs(4326),
-                       name="PKKPR",
-                       style_function=lambda x: {"color":"yellow","weight":3,"fillOpacity":0.1}).add_to(m)
-        if gdf_points is not None:
-            for i, row in gdf_points.iterrows():
-                folium.CircleMarker([row.geometry.y, row.geometry.x],
-                                    radius=4, color="black", fill=True,
-                                    fill_color="orange",
-                                    popup=f"Titik {i+1}").add_to(m)
-        if gdf_tapak is not None:
-            folium.GeoJson(gdf_tapak.to_crs(4326),
-                           name="Tapak Proyek",
-                           style_function=lambda x: {"color":"red","fillColor":"red","fillOpacity":0.4}).add_to(m)
+        
+        # Tambahkan PKKPR polygon
+        folium.GeoJson(
+            st.session_state.gdf_polygon.to_crs(4326),
+            name="PKKPR",
+            style_function=lambda x: {
+                "color": "yellow",
+                "weight": 3,
+                "fillColor": "yellow",
+                "fillOpacity": 0.1
+            },
+            tooltip="Batas PKKPR"
+        ).add_to(m)
+        
+        # Tambahkan titik jika ada
+        if st.session_state.gdf_points is not None:
+            for i, row in st.session_state.gdf_points.iterrows():
+                folium.CircleMarker(
+                    [row.geometry.y, row.geometry.x],
+                    radius=4,
+                    color="black",
+                    fill=True,
+                    fill_color="orange",
+                    fill_opacity=0.8,
+                    popup=f"Titik {i+1}: {row.geometry.y:.6f}, {row.geometry.x:.6f}"
+                ).add_to(m)
+        
+        # Tambahkan tapak jika ada
+        if st.session_state.gdf_tapak is not None:
+            folium.GeoJson(
+                st.session_state.gdf_tapak.to_crs(4326),
+                name="Tapak Proyek",
+                style_function=lambda x: {
+                    "color": "red",
+                    "weight": 2,
+                    "fillColor": "red",
+                    "fillOpacity": 0.4
+                },
+                tooltip="Tapak Proyek"
+            ).add_to(m)
+        
         folium.LayerControl().add_to(m)
         return m
     
-    m = create_map(
-        st.session_state.gdf_polygon, 
-        st.session_state.gdf_points, 
-        st.session_state.gdf_tapak
-    )
-    st_folium(m, width=900, height=600, key="map_view")
+    m = create_map()
+    st_folium(m, width=900, height=600)
 
 # =====================================================
-# Layout PNG dengan caching
+# Layout PNG
 # =====================================================
 if st.session_state.gdf_polygon is not None:
     st.subheader("🖼️ Export Peta PNG")
     
-    @st.cache_data(ttl=600, show_spinner=False)
-    def create_png_map(gdf_polygon, gdf_points, gdf_tapak):
-        try:
-            gdf_poly_3857 = gdf_polygon.to_crs(epsg=3857)
-            
+    if st.button("Buat Peta PNG", key="create_png_button"):
+        with st.spinner("Membuat peta PNG..."):
             try:
-                total_area = gdf_poly_3857.area.sum()
-            except Exception:
-                total_area = 0
-            if total_area > 0 and total_area < 5000:
-                gdf_poly_3857["geometry"] = gdf_poly_3857.geometry.buffer(10)
-            
-            xmin, ymin, xmax, ymax = gdf_poly_3857.total_bounds
-            fig, ax = plt.subplots(figsize=(10, 10), dpi=150)
-            gdf_poly_3857.plot(ax=ax, facecolor="none", edgecolor="yellow", linewidth=2.5)
-            
-            if gdf_tapak is not None:
+                gdf_poly_3857 = st.session_state.gdf_polygon.to_crs(epsg=3857)
+                
+                # Jika area terlalu kecil, tambahkan buffer
                 try:
-                    gdf_tapak.to_crs(epsg=3857).plot(ax=ax, facecolor="red", alpha=0.4)
+                    total_area = gdf_poly_3857.area.sum()
                 except Exception:
+                    total_area = 0
+                if total_area > 0 and total_area < 5000:
+                    gdf_poly_3857["geometry"] = gdf_poly_3857.geometry.buffer(10)
+                
+                xmin, ymin, xmax, ymax = gdf_poly_3857.total_bounds
+                fig, ax = plt.subplots(figsize=(10, 10), dpi=150)
+                
+                # Gambar polygon PKKPR
+                gdf_poly_3857.plot(ax=ax, facecolor="none", edgecolor="yellow", linewidth=2.5)
+                
+                # Gambar tapak jika ada
+                if st.session_state.gdf_tapak is not None:
                     try:
-                        gdf_tapak.plot(ax=ax, facecolor="red", alpha=0.4)
+                        st.session_state.gdf_tapak.to_crs(epsg=3857).plot(ax=ax, facecolor="red", alpha=0.4)
                     except Exception:
-                        pass
-            
-            if gdf_points is not None and not gdf_points.empty:
-                try:
-                    gdf_points.to_crs(epsg=3857).plot(ax=ax, color="orange", markersize=20)
-                except Exception:
+                        try:
+                            st.session_state.gdf_tapak.plot(ax=ax, facecolor="red", alpha=0.4)
+                        except Exception:
+                            pass
+                
+                # Gambar titik jika ada
+                if st.session_state.gdf_points is not None and not st.session_state.gdf_points.empty:
                     try:
-                        gdf_points.plot(ax=ax, color="orange", markersize=20)
+                        st.session_state.gdf_points.to_crs(epsg=3857).plot(ax=ax, color="orange", markersize=20)
                     except Exception:
-                        pass
-            
-            basemap_drawn = False
-            try:
+                        try:
+                            st.session_state.gdf_points.plot(ax=ax, color="orange", markersize=20)
+                        except Exception:
+                            pass
+                
+                # Tambahkan basemap
                 try:
                     zoom = ctx.calculate_zoom(gdf_poly_3857.total_bounds, ax.figure.get_size_inches()[0] * 100)
-                except Exception:
-                    zoom = None
-                if zoom is not None:
-                    zoom = int(min(zoom, 19))
-                try:
                     if zoom is not None:
-                        ctx.add_basemap(ax, crs=3857, source=ctx.providers.Esri.WorldImagery, zoom=zoom)
-                    else:
-                        ctx.add_basemap(ax, crs=3857, source=ctx.providers.Esri.WorldImagery)
-                    basemap_drawn = True
-                except Exception:
+                        zoom = int(min(zoom, 19))
+                    
                     try:
-                        fallback_zoom = 17 if zoom is None else int(min(zoom, 17))
-                        ctx.add_basemap(ax, crs=3857, source=ctx.providers.OpenStreetMap.Mapnik, zoom=fallback_zoom)
-                        basemap_drawn = True
+                        if zoom is not None:
+                            ctx.add_basemap(ax, crs=3857, source=ctx.providers.Esri.WorldImagery, zoom=zoom)
+                        else:
+                            ctx.add_basemap(ax, crs=3857, source=ctx.providers.Esri.WorldImagery)
                     except Exception:
-                        ax.set_facecolor("#dcdcdc")
-                        ax.text(
-                            0.01, 0.01, "Basemap not available",
-                            transform=ax.transAxes, fontsize=8, color="gray",
-                            bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")
-                        )
-            except Exception:
-                ax.set_facecolor("#dcdcdc")
-                ax.text(
-                    0.01, 0.01, "Basemap not available",
-                    transform=ax.transAxes, fontsize=8, color="gray",
-                    bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")
+                        try:
+                            fallback_zoom = 17 if zoom is None else int(min(zoom, 17))
+                            ctx.add_basemap(ax, crs=3857, source=ctx.providers.OpenStreetMap.Mapnik, zoom=fallback_zoom)
+                        except Exception:
+                            ax.set_facecolor("#dcdcdc")
+                            ax.text(
+                                0.01, 0.01, "Basemap tidak tersedia",
+                                transform=ax.transAxes, fontsize=8, color="gray",
+                                bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")
+                            )
+                except Exception:
+                    ax.set_facecolor("#dcdcdc")
+                    ax.text(
+                        0.01, 0.01, "Basemap tidak tersedia",
+                        transform=ax.transAxes, fontsize=8, color="gray",
+                        bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")
+                    )
+                
+                # Set batas peta dengan padding
+                ax.set_xlim(xmin - (xmax - xmin) * 0.05, xmax + (xmax - xmin) * 0.05)
+                ax.set_ylim(ymin - (ymax - ymin) * 0.05, ymax + (ymax - ymin) * 0.05)
+                ax.set_title("Peta Kesesuaian Tapak Proyek dengan PKKPR", fontsize=14)
+                ax.axis("off")
+                
+                # Tambahkan legenda
+                legend_elements = [
+                    mpatches.Patch(facecolor="none", edgecolor="yellow", linewidth=2, label="PKKPR (Polygon)"),
+                    mpatches.Patch(facecolor="red", edgecolor="red", alpha=0.4, label="Tapak Proyek"),
+                    mlines.Line2D([], [], color="orange", marker="o", markeredgecolor="black", linestyle="None",
+                                  markersize=8, label="PKKPR (Titik)")
+                ]
+                ax.legend(
+                    handles=legend_elements,
+                    loc="upper right",
+                    fontsize=9,
+                    frameon=True,
+                    facecolor="white",
+                    edgecolor="black",
+                    title="Keterangan",
+                    title_fontsize=9
                 )
-            
-            ax.set_xlim(xmin - (xmax - xmin) * 0.05, xmax + (xmax - xmin) * 0.05)
-            ax.set_ylim(ymin - (ymax - ymin) * 0.05, ymax + (ymax - ymin) * 0.05)
-            ax.set_title("Peta Kesesuaian Tapak Proyek dengan PKKPR", fontsize=14)
-            ax.axis("off")
-            
-            legend_elements = [
-                mpatches.Patch(facecolor="none", edgecolor="yellow", linewidth=2, label="PKKPR (Polygon)"),
-                mpatches.Patch(facecolor="red", edgecolor="red", alpha=0.4, label="Tapak Proyek"),
-                mlines.Line2D([], [], color="orange", marker="o", markeredgecolor="black", linestyle="None",
-                              markersize=8, label="PKKPR (Titik)")
-            ]
-            ax.legend(
-                handles=legend_elements,
-                loc="upper right",
-                fontsize=9,
-                frameon=True,
-                facecolor="white",
-                edgecolor="black",
-                title="Keterangan",
-                title_fontsize=9
-            )
-            
-            buf = io.BytesIO()
-            plt.savefig(buf, format="png", bbox_inches="tight", dpi=200)
-            buf.seek(0)
-            plt.close(fig)
-            return buf
-        except Exception as e:
-            return None
-    
-    png_buf = create_png_map(
-        st.session_state.gdf_polygon, 
-        st.session_state.gdf_points, 
-        st.session_state.gdf_tapak
-    )
-    
-    if png_buf:
-        st.download_button(
-            "⬇️ Download Peta PNG", 
-            data=png_buf, 
-            file_name="Peta_Overlay.png", 
-            mime="image/png",
-            key="download_png_map"
-        )
-    else:
-        st.warning("Gagal membuat peta PNG.")
+                
+                # Simpan ke buffer
+                buf = io.BytesIO()
+                plt.savefig(buf, format="png", bbox_inches="tight", dpi=200)
+                buf.seek(0)
+                plt.close(fig)
+                
+                # Tombol download
+                st.download_button(
+                    "⬇️ Download Peta PNG", 
+                    data=buf, 
+                    file_name="Peta_Overlay.png", 
+                    mime="image/png",
+                    key="download_png_map"
+                )
+                
+            except Exception as e:
+                st.error(f"Gagal membuat peta: {str(e)}")
+                if DEBUG:
+                    st.exception(e)
 
 # ======================
 # TOMBOL RESET
@@ -668,7 +697,24 @@ if st.sidebar.button("🔄 Reset Semua Data", type="secondary"):
     st.rerun()
 
 # ======================
+# STATUS APLIKASI
+# ======================
+st.sidebar.markdown("---")
+st.sidebar.write("**Status Aplikasi:**")
+if st.session_state.gdf_polygon is not None:
+    st.sidebar.success("✓ PKKPR Dimuat")
+    if st.session_state.gdf_points is not None:
+        st.sidebar.info(f"✓ {len(st.session_state.gdf_points)} titik")
+else:
+    st.sidebar.warning("⏳ Menunggu upload PKKPR")
+
+if st.session_state.gdf_tapak is not None:
+    st.sidebar.success("✓ Tapak Proyek Dimuat")
+else:
+    st.sidebar.info("⏳ Belum upload tapak")
+
+# ======================
 # FOOTER
 # ======================
 st.markdown("---")
-st.caption("© 2023 - PKKPR Converter & Overlay Tool - Optimized Version")
+st.caption("© 2023 - PKKPR Converter & Overlay Tool - Simple & Stable Version")
