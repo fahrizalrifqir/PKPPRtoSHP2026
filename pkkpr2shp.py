@@ -203,69 +203,6 @@ def display_shapefile_table(gdf, title):
         )
 
 # ======================
-# CONTOH PENGGUNAAN DI APLIKASI UTAMA
-# ======================
-# Di bagian upload (misalnya di main.py atau app.py):
-
-import streamlit as st
-import pandas as pd
-import geopandas as gpd
-
-# Judul aplikasi
-st.title("PKKPR → Shapefile Converter & Overlay Tapak Proyek")
-
-# Bagian upload di sebelah kiri
-st.write("## Upload Dokumen PKKPR (PDF atau SHP ZIP)")
-
-# Gunakan kolom untuk tata letak
-col1, col2 = st.columns([1, 1])  # Dua kolom dengan lebar sama
-
-with col1:
-    # Area upload file
-    uploaded_file = st.file_uploader(
-        "Drag and drop file here",
-        type=["pdf", "zip"],
-        help="Limit 200MB per file - PDF, ZIP",
-        key="uploader"
-    )
-    
-    if uploaded_file is not None:
-        st.write(f"**File terupload:** {uploaded_file.name} ({uploaded_file.size / 1024:.1f}KB)")
-    
-    # Contoh file yang sudah diupload (dari contoh Anda)
-    st.write("---")
-    st.write("**Contoh file yang sudah diupload:**")
-    st.write("amdal_tapak_68c1363dd39cc_1499e118-0ef4-f6fe-b400-c5cd4438689a.zip  53.3KB")
-
-# Di sini Anda akan memproses file dan mendapatkan GeoDataFrame
-# Untuk contoh, kita buat GeoDataFrame dummy
-data = {
-    'OBJECTID_1': [0],
-    'PEMRAKARSA': ['PT Jhonlin Batu Mandiri'],
-    'KEGIATAN': ['Perkebunan Tebu'],
-    'TAHUN': [2025],
-    'PROVINSI': ['Sulawesi Tenggara'],
-    'KETERANGAN': ['None']
-}
-
-# Membuat GeoDataFrame dummy dengan geometry
-import geopandas as gpd
-from shapely.geometry import Polygon
-
-# Contoh geometry polygon
-geometry = [Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])]
-gdf = gpd.GeoDataFrame(data, geometry=geometry)
-
-# Tampilkan tabel di kolom kanan
-with col2:
-    # Panggil fungsi display_shapefile_table
-    display_shapefile_table(gdf, "PKKPR")
-    
-    # Informasi tambahan (misalnya luas)
-    st.write("---")
-    st.write("**Lurus UTM 51S:** 122.768.345.27 m²")
-
-# ======================
 # UNIVERSAL PDF PARSER
 # ======================
 def extract_tables_and_coords_from_pdf(uploaded_file):
