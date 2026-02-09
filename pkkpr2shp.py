@@ -350,25 +350,22 @@ with col2:
                     st.warning("Koordinat terbaca, tetapi polygon tidak valid — hanya titik disimpan. Dicoba metode: " + (", ".join(tried) if tried else "tidak ada"))
             else:
                 st.warning("Tidak ada koordinat ditemukan dalam PDF.")
-        elif uploaded.name.lower().endswith(".zip"):
-            with tempfile.TemporaryDirectory() as tmp:
-                zf = zipfile.ZipFile(io.BytesIO(uploaded.read()))
-                zf.extractall(tmp)
-                for root, _, files in os.walk(tmp):
-                    for f in files:
-                        if f.lower().endswith(".shp"):
-                            try:
-                                gdf_polygon = gpd.read_file(os.path.join(root, f))
-                                break
-                            except Exception as e_shp:
-                                if DEBUG:
-                                    st.write("Gagal membaca shapefile:", e_shp)
-            if gdf_polygon is not None:
-                gdf_polygon = fix_geometry(gdf_polygon)
-                st.success("Shapefile PKKPR berhasil dimuat ✅")
-            else:
-                st.warning("ZIP tidak berisi shapefile yang valid.")
-
+        if uploaded_tapak and gdf_polygon is not None:
+    with tempfile.TemporaryDirectory() as tmp:
+        zf = zipfile.ZipFile(io.BytesIO(uploaded_tapak.read()))
+        zf.extractall(tmp)
+        for root, _, files in os.walk(tmp):
+            for f in files:
+                if f.lower().endswith(".shp"):
+                    try:
+                        gdf_tapak = gpd.read_file(os.path.join(root, f))
+                        break
+                    except Exception as e_shp2:
+                        if DEBUG:
+                            st.write("Gagal membaca shapefile tapak:", e_shp2)
+    if gdf_tapak is not None:
+        gdf_tapak = fix_geometry(gdf_tapak)
+        st.success("Tapak berhasil dimuat ✅")
 # ======================
 # ANALISIS LUAS
 # ======================
@@ -456,215 +453,7 @@ if gdf_polygon is not None:
                        style_function=lambda x: {"color":"red","fillColor":"red","fillOpacity":0.4}).add_to(m)
     folium.LayerControl().add_to(m)
     st_folium(m, width=900, height=600)
-# ======================
-# TAMPILKAN ATRIBUT SHP
-# ======================
-def display_shapefile_attributes(gdf, title):
-    """Menampilkan atribut lengkap dari GeoDataFrame"""
-    if gdf is None or gdf.empty:
-        return
-    
-    st.subheader(f"📊 Atribut {title}")
-    
-    # Tampilkan jumlah fitur
-    st.write(f"**Jumlah Fitur:** {len(gdf)}")
-    
-    # Tampilkan kolom-kolom yang ada
-    st.write(f"**Kolom yang tersedia:** {', '.join(gdf.columns)}")
-    
-    # Buat tab untuk tampilan yang berbeda
-    tab1, tab2, tab3 = st.tabs(["Tabel Data", "Statistik Numerik", "Preview Geometri"])
-    
-    with tab1:
-        # Tampilkan tabel data dengan pagination
-        if len(gdf) > 100:
-            st.info(f"Menampilkan 100 baris pertama dari {len(gdf)} baris")
-            display_df = gdf.head(100)
-        else:
-            display_df = gdf
-        
-        # Konversi geometry ke string untuk display
-        display_df_display = display_df.copy()
-        if 'geometry' in display_df_display.columns:
-            display_df_display['geometry'] = display_df_display['geometry'].apply(lambda x: str(x.geom_type) if x else None)
-        
-        st.dataframe(display_df_display, use_container_width=True)
-        
-        # Tombol download CSV
-        csv = display_df_display.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Download sebagai CSV",
-            data=csv,
-            file_name=f"{title.replace(' ', '_')}_atribut.csv",
-            mime="text/csv",
-            key=f"csv_{title}"
-        )
-    
-    with tab2:
-        # Statistik untuk kolom numerik
-        numeric_cols = gdf.select_dtypes(include=['number']).columns
-        if len(numeric_cols) > 0:
-            st.write("**Statistik Numerik:**")
-            for col in numeric_cols:
-                if col != 'geometry':
-                    st.write(f"**{col}**:")
-                    col_stats = {
-                        "Min": float(gdf[col].min()),
-                        "Max": float(gdf[col].max()),
-                        "Rata-rata": float(gdf[col].mean()),
-                        "Standar Deviasi": float(gdf[col].std())
-                    }
-                    for stat_name, stat_value in col_stats.items():
-                        st.write(f"  - {stat_name}: {format_angka_id(stat_value)}")
-        else:
-            st.info("Tidak ada kolom numerik dalam data")
-    
-    with tab3:
-        # Preview informasi geometri
-        geom_types = gdf.geometry.geom_type.value_counts()
-        st.write("**Jenis Geometri:**")
-        for geom_type, count in geom_types.items():
-            st.write(f"- {geom_type}: {count}")
-        
-        # Hitung area dan panjang jika relevan
-        if any(t in gdf.geometry.geom_type.unique() for t in ['Polygon', 'MultiPolygon']):
-            try:
-                # Coba hitung area dalam UTM lokal
-                centroid = gdf.geometry.centroid.iloc[0]
-                utm_epsg, utm_zone = get_utm_info(centroid.x, centroid.y)
-                gdf_utm = gdf.to_crs(epsg=utm_epsg)
-                areas = gdf_utm.geometry.area
-                
-                st.write("**Statistik Luas:**")
-                st.write(f"- Total luas (UTM {utm_zone}): {format_angka_id(areas.sum())} m²")
-                st.write(f"- Luas terkecil: {format_angka_id(areas.min())} m²")
-                st.write(f"- Luas terbesar: {format_angka_id(areas.max())} m²")
-                st.write(f"- Rata-rata luas: {format_angka_id(areas.mean())} m²")
-            except:
-                st.info("Tidak dapat menghitung luas - CRS mungkin tidak sesuai")
-        
-        # Tampilkan preview koordinat untuk 5 fitur pertama
-        st.write("**Preview Koordinat (5 fitur pertama):**")
-        for idx, row in gdf.head(5).iterrows():
-            with st.expander(f"Fitur {idx + 1}: {row.geometry.geom_type}"):
-                if row.geometry.geom_type == 'Point':
-                    st.write(f"X: {row.geometry.x:.6f}, Y: {row.geometry.y:.6f}")
-                elif row.geometry.geom_type in ['LineString', 'LinearRing']:
-                    coords = list(row.geometry.coords)
-                    st.write(f"Jumlah titik: {len(coords)}")
-                    for i, (x, y) in enumerate(coords[:5]):  # Tampilkan 5 titik pertama
-                        st.write(f"  Titik {i+1}: {x:.6f}, {y:.6f}")
-                    if len(coords) > 5:
-                        st.write(f"  ... dan {len(coords)-5} titik lainnya")
-                elif row.geometry.geom_type in ['Polygon', 'MultiPolygon']:
-                    if row.geometry.geom_type == 'Polygon':
-                        exterior = list(row.geometry.exterior.coords)
-                        st.write(f"Jumlah titik exterior: {len(exterior)}")
-                        for i, (x, y) in enumerate(exterior[:5]):  # Tampilkan 5 titik pertama
-                            st.write(f"  Titik {i+1}: {x:.6f}, {y:.6f}")
-                        if len(exterior) > 5:
-                            st.write(f"  ... dan {len(exterior)-5} titik lainnya")
-                    else:
-                        st.write(f"Jumlah polygon: {len(row.geometry.geoms)}")
-                        for i, poly in enumerate(list(row.geometry.geoms)[:3]):  # Tampilkan 3 polygon pertama
-                            exterior = list(poly.exterior.coords)
-                            st.write(f"  Polygon {i+1}: {len(exterior)} titik")
-    
-    st.markdown("---")
 
-# ======================
-# MODIFIKASI BAGIAN UPLOAD UNTUK TAMPILKAN ATRIBUT
-# ======================
-
-# Di bagian upload PKKPR (setelah berhasil load shapefile):
-if uploaded and uploaded.name.lower().endswith(".zip") and gdf_polygon is not None:
-    # Tampilkan atribut shapefile PKKPR
-    display_shapefile_attributes(gdf_polygon, "PKKPR (Polygon)")
-    
-    # Juga tampilkan atribut points jika ada
-    if gdf_points is not None and not gdf_points.empty:
-        display_shapefile_attributes(gdf_points, "PKKPR (Points)")
-
-# Di bagian upload Tapak Proyek:
-if uploaded_tapak and gdf_tapak is not None:
-    # Tampilkan atribut shapefile Tapak
-    display_shapefile_attributes(gdf_tapak, "Tapak Proyek")
-    
-    # Juga tampilkan analisis overlap per fitur jika ada polygon PKKPR
-    if gdf_polygon is not None:
-        st.subheader("🔍 Analisis Overlap Per Fitur")
-        
-        try:
-            # Konversi ke CRS yang sama untuk analisis
-            gdf_tapak_local = gdf_tapak.to_crs(gdf_polygon.crs)
-            
-            # Buat dataframe untuk analisis overlap
-            overlap_data = []
-            
-            for idx, tapak_row in gdf_tapak_local.iterrows():
-                tapak_geom = tapak_row.geometry
-                
-                # Hitung luas total tapak ini
-                tapak_area = tapak_geom.area
-                
-                # Cari overlap dengan semua polygon PKKPR
-                overlap_area = 0
-                for _, pkkpr_row in gdf_polygon.iterrows():
-                    if tapak_geom.intersects(pkkpr_row.geometry):
-                        intersection = tapak_geom.intersection(pkkpr_row.geometry)
-                        if not intersection.is_empty:
-                            overlap_area += intersection.area
-                
-                # Hitung persentase
-                percentage = (overlap_area / tapak_area * 100) if tapak_area > 0 else 0
-                
-                overlap_data.append({
-                    'ID_Fitur': idx + 1,
-                    'Luas_Total': tapak_area,
-                    'Luas_Overlap': overlap_area,
-                    'Persentase_Overlap': percentage,
-                    'Status': 'Sesuai' if percentage > 95 else 'Sebagian' if percentage > 0 else 'Di Luar'
-                })
-            
-            # Buat DataFrame hasil analisis
-            df_overlap = pd.DataFrame(overlap_data)
-            
-            # Format angka
-            df_display = df_overlap.copy()
-            df_display['Luas_Total'] = df_display['Luas_Total'].apply(lambda x: format_angka_id(x))
-            df_display['Luas_Overlap'] = df_display['Luas_Overlap'].apply(lambda x: format_angka_id(x))
-            df_display['Persentase_Overlap'] = df_display['Persentase_Overlap'].apply(lambda x: f"{x:.2f}%")
-            
-            st.dataframe(df_display, use_container_width=True)
-            
-            # Ringkasan statistik
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                total_features = len(df_overlap)
-                st.metric("Jumlah Fitur", total_features)
-            
-            with col2:
-                sesuai_count = len(df_overlap[df_overlap['Status'] == 'Sesuai'])
-                st.metric("Sesuai PKKPR", f"{sesuai_count} ({sesuai_count/total_features*100:.1f}%)")
-            
-            with col3:
-                total_area = df_overlap['Luas_Total'].sum()
-                overlap_area_total = df_overlap['Luas_Overlap'].sum()
-                st.metric("Total Overlap", f"{overlap_area_total/total_area*100:.1f}%")
-            
-            # Tombol download hasil analisis
-            csv_overlap = df_overlap.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Download Hasil Analisis Overlap",
-                data=csv_overlap,
-                file_name="Analisis_Overlap_Per_Fitur.csv",
-                mime="text/csv"
-            )
-            
-        except Exception as e:
-            st.warning(f"Tidak dapat melakukan analisis overlap per fitur: {str(e)}")
-            if DEBUG:
-                st.exception(e)
 # =====================================================
 # Layout PNG — tombol download + legenda (pojok kanan atas)
 # =====================================================
