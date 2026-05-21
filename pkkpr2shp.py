@@ -1,120 +1,272 @@
+# FULL STREAMLIT PKKPR
+# FINAL VERSION + ATTRIBUTE TABLE SHP PKKPR & TAPAK
+# =========================================================
+
 import streamlit as st
 import geopandas as gpd
 import pandas as pd
-import io, os, zipfile, tempfile, re, math
-from shapely.geometry import Point, Polygon, MultiPolygon, GeometryCollection, MultiPoint, LineString
+import io
+import os
+import zipfile
+import tempfile
+import re
+import math
+
+from shapely.geometry import (
+    Point,
+    Polygon,
+    MultiPolygon,
+    GeometryCollection,
+    LineString,
+)
+
 from shapely.validation import make_valid
+from shapely.ops import polygonize_full
+
 import folium
 from streamlit_folium import st_folium
-import matplotlib.pyplot as plt
-import contextily as ctx
 from folium.plugins import Fullscreen
-import xyzservices.providers as xyz
+
+import pdfplumber
+
+import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 
+import contextily as ctx
+import xyzservices.providers as xyz
+
+# =========================================================
+# CONFIG
+# =========================================================
 st.set_page_config(
-    page_title="PKKPR → SHP + Overlay (Final)",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="PKKPR → SHP + Overlay",
+    layout="wide"
 )
 
-st.title("PKKPR → Shapefile Converter & Overlay Tapak Proyek (Final)")
+st.title("PKKPR → Shapefile Converter & Overlay Tapak Proyek")
 st.markdown("---")
 
-if 'gdf_polygon' not in st.session_state:
-    st.session_state.gdf_polygon = None
-if 'gdf_points' not in st.session_state:
-    st.session_state.gdf_points = None
-if 'gdf_tapak' not in st.session_state:
-    st.session_state.gdf_tapak = None
-if 'uploaded_file_name' not in st.session_state:
-    st.session_state.uploaded_file_name = None
-if 'uploaded_tapak_name' not in st.session_state:
-    st.session_state.uploaded_tapak_name = None
+DEBUG = st.sidebar.checkbox("Debug Mode", value=False)
 
-DEBUG = st.sidebar.checkbox("Tampilkan debug logs", value=False)
-
+# =========================================================
+# HELPERS
+# =========================================================
 def format_angka_id(value):
     try:
         val = float(value)
+
         if abs(val - round(val)) < 0.001:
             return f"{int(round(val)):,}".replace(",", ".")
+
         s = f"{val:,.2f}"
         return s.replace(",", "X").replace(".", ",").replace("X", ".")
+
     except:
         return str(value)
 
+
 def get_utm_info(lon, lat):
     zone = int((lon + 180) / 6) + 1
-    epsg = 32600 + zone if lat >= 0 else 32700 + zone
+
+    if lat >= 0:
+        epsg = 32600 + zone
+    else:
+        epsg = 32700 + zone
+
     zone_label = f"{zone}{'N' if lat >= 0 else 'S'}"
     return epsg, zone_label
+
+
+def try_parse_float(s):
+    try:
+        return float(str(s).strip().replace(",", "."))
+    except:
+        return None
+
+
+def dms_to_decimal(dms_str):
+    if not dms_str:
+        return None
+
+    s = str(dms_str).upper().strip()
+
+    s = (
+        s.replace("BT", "E")
+        .replace("BB", "W")
+        .replace("LS", "S")
+        .replace("LU", "N")
+        .replace("º", "°")
+        .replace("’", "'")
+        .replace("″", '"')
+    )
+
+    direction = None
+    m_dir = re.search(r"[NSEW]", s)
+
+    if m_dir:
+        direction = m_dir.group(0)
+
+    nums = re.findall(r"[-+]?\d+(?:\.\d+)?", s)
+
+    if not nums:
+        return None
+
+    try:
+        deg = float(nums[0])
+        minutes = float(nums[1]) if len(nums) > 1 else 0
+        seconds = float(nums[2]) if len(nums) > 2 else 0
+    except:
+        return None
+
+    val = deg + (minutes / 60) + (seconds / 3600)
+
+    if direction in ["S", "W"]:
+        val *= -1
+
+    return val
+
 
 def fix_geometry(gdf):
     if gdf is None or gdf.empty:
         return gdf
 
-    gdf["geometry"] = gdf["geometry"].apply(make_valid)
+    gdf = gdf.copy()
+    gdf["geometry"] = gdf.geometry.apply(make_valid)
 
-    def extract_valid(geom):
+    def clean_geom(geom):
         if geom is None:
             return None
+
         if geom.geom_type == "GeometryCollection":
-            polys = [g for g in geom.geoms if g.geom_type in ["Polygon", "MultiPolygon"]]
+            polys = [
+                g for g in geom.geoms
+                if g.geom_type in ["Polygon", "MultiPolygon"]
+            ]
+
+            if len(polys) == 0:
+                return None
+
             if len(polys) == 1:
                 return polys[0]
-            elif polys:
-                return MultiPolygon(polys)
-            return None
+
+            return MultiPolygon(polys)
+
         return geom
 
-    gdf["geometry"] = gdf["geometry"].apply(extract_valid)
+    gdf["geometry"] = gdf.geometry.apply(clean_geom)
+    gdf = gdf[gdf.geometry.notnull()]
+    gdf["geometry"] = gdf.geometry.buffer(0)
+
     return gdf
 
-def display_shapefile_table(gdf, title):
-    if gdf is None or gdf.empty:
-        return
 
-    st.write(f"**Tabel Data {title}**")
-    st.caption(f"{len(gdf)} fitur, {len(gdf.columns)} kolom")
+def sort_coords_clockwise(coords):
+    cx = sum(x for x, y in coords) / len(coords)
+    cy = sum(y for x, y in coords) / len(coords)
 
-    display_df = gdf.copy()
-
-    if "geometry" in display_df.columns:
-        def format_geometry(geom):
-            if geom is None:
-                return None
-            gt = geom.geom_type
-            if gt == "Point":
-                return f"Point ({geom.x:.6f}, {geom.y:.6f})"
-            elif gt == "Polygon":
-                return f"Polygon ({len(geom.exterior.coords)} titik)"
-            elif gt == "MultiPolygon":
-                return f"MultiPolygon ({len(geom.geoms)} polygon)"
-            return gt
-
-        display_df["geometry"] = display_df["geometry"].apply(format_geometry)
-
-    st.dataframe(display_df, use_container_width=True, height=300)
-
-    csv = display_df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label=f"📥 Download CSV {title}",
-        data=csv,
-        file_name=f"{title.replace(' ', '_')}.csv",
-        mime="text/csv"
+    return sorted(
+        coords,
+        key=lambda p: math.atan2(p[1] - cy, p[0] - cx)
     )
+
+
+def extract_tables_and_coords_from_pdf(uploaded_file):
+    coords_plain = []
+    ordered_from_table = False
+
+    with pdfplumber.open(uploaded_file) as pdf:
+        coords_with_no = []
+
+        for page in pdf.pages:
+            table = page.extract_table()
+
+            if not table:
+                continue
+
+            try:
+                df = pd.DataFrame(table[1:], columns=table[0])
+            except:
+                df = pd.DataFrame(table)
+
+            df.columns = [
+                re.sub(r"\s+", " ", str(c)).strip().lower()
+                for c in df.columns
+            ]
+
+            no_col = None
+            bujur_col = None
+            lintang_col = None
+
+            for col in df.columns:
+                if re.match(r"no\b", col):
+                    no_col = col
+
+                if any(k in col for k in ["bujur", "longitude", "long", "x"]):
+                    bujur_col = col
+
+                if any(k in col for k in ["lintang", "latitude", "lat", "y"]):
+                    lintang_col = col
+
+            if bujur_col and lintang_col:
+                for _, row in df.iterrows():
+                    raw_no = row.get(no_col, None)
+                    raw_lon = str(row.get(bujur_col, "")).strip()
+                    raw_lat = str(row.get(lintang_col, "")).strip()
+
+                    def looks_like_dms(s):
+                        return any(sym in s.upper() for sym in [
+                            "°", "'", '"', "BT", "LS", "LU", "E", "W"
+                        ])
+
+                    lon = dms_to_decimal(raw_lon) if looks_like_dms(raw_lon) else try_parse_float(raw_lon)
+                    lat = dms_to_decimal(raw_lat) if looks_like_dms(raw_lat) else try_parse_float(raw_lat)
+
+                    if lon and lat:
+                        try:
+                            n = int(str(raw_no).strip())
+                        except:
+                            n = None
+
+                        coords_with_no.append((n, lon, lat))
+
+        if coords_with_no:
+            coords_with_no.sort(key=lambda x: x[0] if x[0] is not None else 99999)
+
+            coords_plain = [(lon, lat) for _, lon, lat in coords_with_no]
+            ordered_from_table = True
+
+    seen = set()
+    unique_coords = []
+
+    for xy in coords_plain:
+        key = (round(xy[0], 6), round(xy[1], 6))
+
+        if key not in seen:
+            unique_coords.append(xy)
+            seen.add(key)
+
+    return {
+        "coords": unique_coords,
+        "ordered": ordered_from_table
+    }
+
 
 def save_shapefile_layers(gdf_poly, gdf_points):
     with tempfile.TemporaryDirectory() as tmpdir:
-        if gdf_poly is not None and not gdf_poly.empty:
-            gdf_poly.to_crs(epsg=4326).to_file(os.path.join(tmpdir, "PKKPR_Polygon.shp"))
 
-        if gdf_points is not None and not gdf_points.empty:
-            gdf_points.to_crs(epsg=4326).to_file(os.path.join(tmpdir, "PKKPR_Points.shp"))
+        if gdf_poly is not None:
+            gdf_poly.to_crs(epsg=4326).to_file(
+                os.path.join(tmpdir, "PKKPR_Polygon.shp")
+            )
+
+        if gdf_points is not None:
+            gdf_points.to_crs(epsg=4326).to_file(
+                os.path.join(tmpdir, "PKKPR_Points.shp")
+            )
 
         buf = io.BytesIO()
+
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             for f in os.listdir(tmpdir):
                 zf.write(os.path.join(tmpdir, f), arcname=f)
@@ -122,95 +274,116 @@ def save_shapefile_layers(gdf_poly, gdf_points):
         buf.seek(0)
         return buf.read()
 
-def validate_shapefile_zip(uploaded):
-    with tempfile.TemporaryDirectory() as tmp:
-        try:
-            zf = zipfile.ZipFile(io.BytesIO(uploaded.read()))
-            zf.extractall(tmp)
-        except Exception:
-            return None, "ZIP tidak valid"
 
-        shp = None
-        shx = False
-        dbf = False
+def read_shp_zip(uploaded_zip):
+    with tempfile.TemporaryDirectory() as tmp:
+        zf = zipfile.ZipFile(io.BytesIO(uploaded_zip.read()))
+        zf.extractall(tmp)
+
+        shp_found = None
 
         for root, _, files in os.walk(tmp):
             for f in files:
-                fl = f.lower()
-                fp = os.path.join(root, f)
+                if f.lower().endswith(".shp"):
+                    shp_found = os.path.join(root, f)
+                    break
 
-                if fl.endswith(".shp"):
-                    shp = fp
-                elif fl.endswith(".shx"):
-                    shx = True
-                elif fl.endswith(".dbf"):
-                    dbf = True
+        if shp_found:
+            return gpd.read_file(shp_found)
 
-        if not shp:
-            return None, "File .shp tidak ditemukan"
+    return None
 
-        if not shx or not dbf:
-            return None, "ZIP harus berisi .shp + .shx + .dbf"
 
-        try:
-            gdf = gpd.read_file(shp)
-            return gdf, None
-        except Exception as e:
-            return None, str(e)
+def show_attribute_table(gdf, title):
+    if gdf is None:
+        return
 
-def process_pkkpr_file(uploaded):
-    gdf, err = validate_shapefile_zip(uploaded)
-    if err:
-        return err, False
+    cols = [c for c in gdf.columns if c.lower() != "geometry"]
 
-    st.session_state.gdf_polygon = fix_geometry(gdf)
-    st.session_state.gdf_points = None
-    return "Shapefile PKKPR berhasil dimuat ✅", True
+    if cols:
+        st.subheader(title)
+        st.dataframe(
+            gdf[cols],
+            use_container_width=True
+        )
 
-def process_tapak_file(uploaded):
-    gdf, err = validate_shapefile_zip(uploaded)
-    if err:
-        return False
-    st.session_state.gdf_tapak = fix_geometry(gdf)
-    return True
-
-st.subheader("📄 Upload Dokumen PKKPR (SHP ZIP saja)")
+# =========================================================
+# UPLOAD PKKPR
+# =========================================================
+st.subheader("📄 Upload Dokumen PKKPR")
 
 uploaded = st.file_uploader(
-    "Unggah file PKKPR",
-    type=["zip"],
-    key="pkkpr_uploader"
+    "Upload PDF / SHP ZIP",
+    type=["pdf", "zip"]
 )
 
-if uploaded and st.session_state.uploaded_file_name != uploaded.name:
-    with st.spinner("Memproses shapefile PKKPR..."):
-        msg, success = process_pkkpr_file(uploaded)
-        if success:
-            st.success(msg)
-            st.session_state.uploaded_file_name = uploaded.name
-        else:
-            st.warning(msg)
+gdf_polygon = None
+gdf_points = None
 
-if st.session_state.gdf_polygon is not None:
-    display_shapefile_table(st.session_state.gdf_polygon, "PKKPR")
+if uploaded:
 
-    centroid = st.session_state.gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
+    if uploaded.name.lower().endswith(".pdf"):
+        parsed = extract_tables_and_coords_from_pdf(uploaded)
+        coords = parsed["coords"]
+        ordered_flag = parsed["ordered"]
+
+        if coords:
+            pts = [Point(x, y) for x, y in coords]
+
+            gdf_points = gpd.GeoDataFrame(
+                geometry=pts,
+                crs="EPSG:4326"
+            )
+
+            coords_proc = coords.copy()
+
+            if not ordered_flag:
+                coords_proc = sort_coords_clockwise(coords_proc)
+
+            if coords_proc[0] != coords_proc[-1]:
+                coords_proc.append(coords_proc[0])
+
+            poly_candidate = Polygon(coords_proc)
+
+            if not poly_candidate.is_valid:
+                poly_candidate = poly_candidate.buffer(0)
+
+            if poly_candidate and poly_candidate.area > 0:
+                gdf_polygon = gpd.GeoDataFrame(
+                    geometry=[poly_candidate],
+                    crs="EPSG:4326"
+                )
+
+                gdf_polygon = fix_geometry(gdf_polygon)
+
+                st.success(f"Berhasil membuat polygon dari {len(coords)} titik")
+
+    elif uploaded.name.lower().endswith(".zip"):
+        gdf_polygon = read_shp_zip(uploaded)
+
+        if gdf_polygon is not None:
+            gdf_polygon = fix_geometry(gdf_polygon)
+            st.success("Shapefile PKKPR berhasil dibaca")
+
+            show_attribute_table(
+                gdf_polygon,
+                "📋 Atribut SHP PKKPR"
+            )
+
+# =========================================================
+# ANALISIS LUAS
+# =========================================================
+if gdf_polygon is not None:
+    centroid = gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
     utm_epsg, utm_zone = get_utm_info(centroid.x, centroid.y)
 
-    luas_utm = st.session_state.gdf_polygon.to_crs(utm_epsg).area.sum()
-    luas_merc = st.session_state.gdf_polygon.to_crs(3857).area.sum()
+    luas_utm = gdf_polygon.to_crs(utm_epsg).area.sum()
+    luas_mercator = gdf_polygon.to_crs(3857).area.sum()
 
-    st.subheader("📏 Analisis Luas")
+    st.write(f"Luas UTM {utm_zone}: {format_angka_id(luas_utm)} m²")
+    st.write(f"Luas Mercator: {format_angka_id(luas_mercator)} m²")
 
-    c1, c2 = st.columns(2)
-
-    with c1:
-        st.metric("Luas UTM", f"{format_angka_id(luas_utm)} m²", f"Zona {utm_zone}")
-
-    with c2:
-        st.metric("Luas Mercator", f"{format_angka_id(luas_merc)} m²")
-
-    zip_bytes = save_shapefile_layers(st.session_state.gdf_polygon, st.session_state.gdf_points)
+    zip_bytes = save_shapefile_layers(gdf_polygon, gdf_points)
 
     st.download_button(
         "⬇️ Download SHP PKKPR",
@@ -219,192 +392,226 @@ if st.session_state.gdf_polygon is not None:
         mime="application/zip"
     )
 
-st.subheader("🏗️ Upload Shapefile Tapak Proyek (ZIP)")
+# =========================================================
+# TAPAK
+# =========================================================
+st.subheader("🏗️ Upload Tapak")
 
 uploaded_tapak = st.file_uploader(
-    "Unggah Tapak Proyek",
-    type=["zip"],
-    key="tapak_uploader"
+    "Upload SHP ZIP Tapak",
+    type=["zip"]
 )
 
-if uploaded_tapak and st.session_state.uploaded_tapak_name != uploaded_tapak.name:
-    with st.spinner("Memproses tapak proyek..."):
-        if process_tapak_file(uploaded_tapak):
-            st.success("Tapak berhasil dimuat ✅")
-            st.session_state.uploaded_tapak_name = uploaded_tapak.name
-        else:
-            st.warning("Gagal memuat shapefile tapak")
+gdf_tapak = None
 
-if st.session_state.gdf_tapak is not None:
-    display_shapefile_table(st.session_state.gdf_tapak, "Tapak Proyek")
+if uploaded_tapak and gdf_polygon is not None:
+    gdf_tapak = read_shp_zip(uploaded_tapak)
 
-if st.session_state.gdf_polygon is not None and st.session_state.gdf_tapak is not None:
+    if gdf_tapak is not None:
+        gdf_tapak = fix_geometry(gdf_tapak)
+
+        st.success("Tapak berhasil dibaca")
+
+        show_attribute_table(
+            gdf_tapak,
+            "📋 Atribut SHP Tapak"
+        )
+
+# =========================================================
+# OVERLAY
+# =========================================================
+if gdf_polygon is not None and gdf_tapak is not None:
     st.subheader("📊 Analisis Overlay")
 
-    centroid = st.session_state.gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
+    centroid = gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
     utm_epsg, utm_zone = get_utm_info(centroid.x, centroid.y)
 
-    gdf_tapak_utm = st.session_state.gdf_tapak.to_crs(utm_epsg)
-    gdf_pkkpr_utm = st.session_state.gdf_polygon.to_crs(utm_epsg)
+    gdf_poly_utm = gdf_polygon.to_crs(utm_epsg)
+    gdf_tapak_utm = gdf_tapak.to_crs(utm_epsg)
 
+    inter = gpd.overlay(
+        gdf_tapak_utm,
+        gdf_poly_utm,
+        how="intersection"
+    )
+
+    luas_overlap = inter.area.sum()
     luas_tapak = gdf_tapak_utm.area.sum()
+    luas_luar = max(0, luas_tapak - luas_overlap)
 
-    try:
-        inter = gpd.overlay(gdf_tapak_utm, gdf_pkkpr_utm, how="intersection")
-        luas_overlap = inter.area.sum()
-    except:
-        luas_overlap = 0
+    st.write(f"Luas Tapak: {format_angka_id(luas_tapak)} m²")
+    st.write(f"Luas Overlay: {format_angka_id(luas_overlap)} m²")
+    st.write(f"Luas di luar PKKPR: {format_angka_id(luas_luar)} m²")
 
-    luas_luar = luas_tapak - luas_overlap
+# =========================================================
+# MAP
+# =========================================================
+if gdf_polygon is not None:
+    st.subheader("🌍 Preview Peta")
 
-    c1, c2, c3 = st.columns(3)
+    if gdf_tapak is not None:
+        combined = pd.concat([
+            gdf_polygon.to_crs(4326),
+            gdf_tapak.to_crs(4326)
+        ], ignore_index=True)
+    else:
+        combined = gdf_polygon.to_crs(4326)
 
-    with c1:
-        st.metric("Luas Tapak", f"{format_angka_id(luas_tapak)} m²")
-
-    with c2:
-        st.metric("Di Dalam PKKPR", f"{format_angka_id(luas_overlap)} m²")
-
-    with c3:
-        st.metric("Di Luar PKKPR", f"{format_angka_id(luas_luar)} m²")
-
-if st.session_state.gdf_polygon is not None:
-    st.subheader("🌍 Preview Peta Interaktif")
-
-    centroid = st.session_state.gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
+    centroid = combined.geometry.unary_union.centroid
 
     m = folium.Map(
         location=[centroid.y, centroid.x],
-        zoom_start=17,
+        zoom_start=18,
         tiles=None
     )
 
-    Fullscreen(position="bottomleft").add_to(m)
+    Fullscreen().add_to(m)
 
-    folium.TileLayer("openstreetmap").add_to(m)
-    folium.TileLayer("CartoDB Positron").add_to(m)
-    folium.TileLayer(xyz.Esri.WorldImagery).add_to(m)
+    folium.TileLayer(
+        xyz.Esri.WorldImagery
+    ).add_to(m)
 
     folium.GeoJson(
-        st.session_state.gdf_polygon.to_crs(4326),
+        gdf_polygon.to_crs(4326),
         name="PKKPR",
         style_function=lambda x: {
             "color": "yellow",
             "weight": 3,
-            "fillColor": "yellow",
-            "fillOpacity": 0.15
+            "fillOpacity": 0.1
         }
     ).add_to(m)
 
-    if st.session_state.gdf_tapak is not None:
+    if gdf_tapak is not None:
         folium.GeoJson(
-            st.session_state.gdf_tapak.to_crs(4326),
+            gdf_tapak.to_crs(4326),
             name="Tapak",
             style_function=lambda x: {
                 "color": "red",
-                "weight": 2,
                 "fillColor": "red",
                 "fillOpacity": 0.35
             }
         ).add_to(m)
 
+    if gdf_points is not None:
+        for i, row in gdf_points.iterrows():
+            folium.CircleMarker(
+                [row.geometry.y, row.geometry.x],
+                radius=4,
+                color="black",
+                fill=True,
+                fill_color="orange",
+                popup=f"Titik {i+1}"
+            ).add_to(m)
+
+    bounds = combined.total_bounds
+
+    m.fit_bounds([
+        [bounds[1], bounds[0]],
+        [bounds[3], bounds[2]]
+    ])
+
     folium.LayerControl().add_to(m)
 
-    st_folium(m, width=1000, height=600)
+    st_folium(
+        m,
+        width=1000,
+        height=600
+    )
 
-if st.session_state.gdf_polygon is not None:
-    st.subheader("🖼️ Export Peta PNG")
+# =========================================================
+# PNG EXPORT
+# =========================================================
+if gdf_polygon is not None:
+    st.subheader("🖼 Export PNG")
 
-    if st.button("Buat Peta PNG"):
-        with st.spinner("Membuat PNG..."):
-            try:
-                gdf_poly_3857 = st.session_state.gdf_polygon.to_crs(3857)
-                xmin, ymin, xmax, ymax = gdf_poly_3857.total_bounds
+    try:
+        gdf_poly_3857 = gdf_polygon.to_crs(3857)
 
-                fig, ax = plt.subplots(figsize=(10, 10), dpi=150)
+        if gdf_tapak is not None:
+            gdf_tapak_3857 = gdf_tapak.to_crs(3857)
 
-                providers = [
-                    ctx.providers.Esri.WorldImagery,
-                    ctx.providers.OpenStreetMap.Mapnik,
-                    ctx.providers.CartoDB.Positron
-                ]
+            extent_gdf = pd.concat([
+                gdf_poly_3857,
+                gdf_tapak_3857
+            ], ignore_index=True)
+        else:
+            extent_gdf = gdf_poly_3857
 
-                basemap_ok = False
+        xmin, ymin, xmax, ymax = extent_gdf.total_bounds
 
-                for provider in providers:
-                    try:
-                        ctx.add_basemap(
-                            ax,
-                            crs=gdf_poly_3857.crs,
-                            source=provider,
-                            zoom=17,
-                            reset_extent=False
-                        )
-                        basemap_ok = True
-                        break
-                    except:
-                        continue
+        fig, ax = plt.subplots(
+            figsize=(10, 10),
+            dpi=300
+        )
 
-                if not basemap_ok:
-                    ax.set_facecolor("#dddddd")
+        if gdf_tapak is not None:
+            gdf_tapak_3857.plot(
+                ax=ax,
+                facecolor="red",
+                edgecolor="red",
+                alpha=0.35
+            )
 
-                gdf_poly_3857.plot(
-                    ax=ax,
-                    facecolor="none",
-                    edgecolor="yellow",
-                    linewidth=2.5
-                )
+        gdf_poly_3857.plot(
+            ax=ax,
+            facecolor="none",
+            edgecolor="yellow",
+            linewidth=2.5
+        )
 
-                if st.session_state.gdf_tapak is not None:
-                    st.session_state.gdf_tapak.to_crs(3857).plot(
-                        ax=ax,
-                        facecolor="red",
-                        alpha=0.4
-                    )
+        if gdf_points is not None:
+            gdf_points.to_crs(3857).plot(
+                ax=ax,
+                color="orange",
+                edgecolor="black",
+                markersize=30
+            )
 
-                ax.set_xlim(xmin - 50, xmax + 50)
-                ax.set_ylim(ymin - 50, ymax + 50)
+        ctx.add_basemap(
+            ax,
+            source=ctx.providers.Esri.WorldImagery,
+            crs=gdf_poly_3857.crs
+        )
 
-                ax.axis("off")
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
 
-                legend_elements = [
-                    mpatches.Patch(facecolor="none", edgecolor="yellow", label="PKKPR"),
-                    mpatches.Patch(facecolor="red", edgecolor="red", alpha=0.4, label="Tapak")
-                ]
+        ax.axis("off")
 
-                ax.legend(handles=legend_elements)
+        legend_elements = [
+            mpatches.Patch(
+                facecolor="none",
+                edgecolor="yellow",
+                label="PKKPR"
+            ),
+            mpatches.Patch(
+                facecolor="red",
+                edgecolor="red",
+                alpha=0.4,
+                label="Tapak"
+            )
+        ]
 
-                buf = io.BytesIO()
-                plt.savefig(buf, format="png", bbox_inches="tight", dpi=200)
-                buf.seek(0)
-                plt.close(fig)
+        ax.legend(handles=legend_elements)
 
-                st.download_button(
-                    "⬇️ Download PNG",
-                    buf,
-                    "Peta_Overlay.png",
-                    mime="image/png"
-                )
+        buf = io.BytesIO()
 
-            except Exception as e:
-                st.error(str(e))
+        plt.savefig(
+            buf,
+            format="png",
+            bbox_inches="tight",
+            dpi=300
+        )
 
-st.sidebar.markdown("---")
+        buf.seek(0)
+        plt.close(fig)
 
-if st.sidebar.button("🔄 Reset Semua Data"):
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-    st.rerun()
+        st.download_button(
+            "⬇️ Download Peta PNG",
+            data=buf,
+            file_name="Peta_Overlay.png",
+            mime="image/png"
+        )
 
-st.sidebar.markdown("---")
-
-if st.session_state.gdf_polygon is not None:
-    st.sidebar.success("✓ PKKPR Dimuat")
-else:
-    st.sidebar.warning("Menunggu upload PKKPR")
-
-if st.session_state.gdf_tapak is not None:
-    st.sidebar.success("✓ Tapak Dimuat")
-
-st.markdown("---")
-st.caption("PKKPR Converter Stable Version")
+    except Exception as e:
+        st.error(f"Gagal membuat PNG: {e}")
