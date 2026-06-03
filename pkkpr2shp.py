@@ -484,14 +484,20 @@ if gdf_polygon is not None:
     )
 
     luas_utm = gdf_polygon.to_crs(utm_epsg).area.sum()
+    luas_utm_ha = luas_utm / 10000
     luas_merc = gdf_polygon.to_crs(3857).area.sum()
+    luas_merc_ha = luas_merc / 10000
 
     st.write(
-        f"Luas UTM {utm_zone}: {format_angka_id(luas_utm)} m²"
+        f"Luas UTM {utm_zone}: "
+        f"{format_angka_id(luas_utm)} m² "
+        f"({format_angka_id(luas_utm_ha)} Ha)"
     )
 
     st.write(
-        f"Luas Mercator: {format_angka_id(luas_merc)} m²"
+        f"Luas Mercator: "
+        f"{format_angka_id(luas_merc)} m² "
+        f"{format_angka_id(luas_merc_ha)} Ha "
     )
 
     zip_bytes = save_shapefile_layers(
@@ -558,15 +564,21 @@ if gdf_polygon is not None and gdf_tapak is not None:
     luas_luar = max(0, luas_tapak - luas_overlap)
 
     st.write(
-        f"Luas Tapak UTM {utm_zone}: {format_angka_id(luas_tapak)} m²"
+        f"Luas Tapak UTM {utm_zone}: "
+        f"{format_angka_id(luas_tapak)} m² "
+        f"({format_angka_id(luas_tapak/10000)} Ha)"
     )
 
     st.write(
-        f"Luas Overlay: {format_angka_id(luas_overlap)} m²"
+        f"Luas Overlay: "
+        f"{format_angka_id(luas_overlap)} m² "
+        f"({format_angka_id(luas_overlap/10000)} Ha)"
     )
 
     st.write(
-        f"Luas Tapak di luar PKKPR: {format_angka_id(luas_luar)} m²"
+        f"Luas Tapak di luar PKKPR: "
+        f"{format_angka_id(luas_luar)} m² "
+        f"({format_angka_id(luas_luar/10000)} Ha)"
     )
     # =========================================================
 # PREVIEW MAP
