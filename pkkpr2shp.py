@@ -554,11 +554,11 @@ if gdf_polygon is not None and gdf_tapak is not None:
     )
 
     luas_overlap = inter.area.sum()
-    luas_tapak = gdf_tapak_utm.area.sum()
+    luas_tapak  = gdf_tapak_utm.area.sum()
     luas_luar = max(0, luas_tapak - luas_overlap)
 
     st.write(
-        f"Luas Tapak: {format_angka_id(luas_tapak)} m²"
+        f"Luas Tapak {utm_zone}: {format_angka_id(luas_tapak)} m²"
     )
 
     st.write(
