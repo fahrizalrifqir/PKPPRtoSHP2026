@@ -497,7 +497,7 @@ if gdf_polygon is not None:
     st.write(
         f"Luas Mercator: "
         f"{format_angka_id(luas_merc)} m² "
-        f"{format_angka_id(luas_merc_ha)} Ha "
+        f"({format_angka_id(luas_merc_ha)} Ha)"
     )
 
     zip_bytes = save_shapefile_layers(
