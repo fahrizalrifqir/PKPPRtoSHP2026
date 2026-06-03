@@ -558,7 +558,7 @@ if gdf_polygon is not None and gdf_tapak is not None:
     luas_luar = max(0, luas_tapak - luas_overlap)
 
     st.write(
-        f"Luas Tapak utm {utm_zone}: {format_angka_id(luas_tapak)} m²"
+        f"Luas Tapak UTM {utm_zone}: {format_angka_id(luas_tapak)} m²"
     )
 
     st.write(
