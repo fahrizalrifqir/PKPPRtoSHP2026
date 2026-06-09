@@ -47,7 +47,85 @@ st.title("PKKPR → SHP + Overlay Tapak Proyek")
 st.markdown("---")
 
 DEBUG = st.sidebar.checkbox("Debug Mode", False)
+df_wilayah = pd.read_csv(
+    "Kecamatan.csv"
+)
 
+st.sidebar.markdown("---")
+st.sidebar.subheader("🗺️ Zona UTM")
+
+provinsi = st.sidebar.selectbox(
+    "Provinsi",
+    [""] + sorted(
+        df_wilayah["PROVINSI"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+)
+
+df_kab = df_wilayah.copy()
+
+if provinsi:
+    df_kab = df_kab[
+        df_kab["PROVINSI"] == provinsi
+    ]
+
+kabupaten = st.sidebar.selectbox(
+    "Kabupaten/Kota",
+    [""] + sorted(
+        df_kab["KABUPATEN/KOTA"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+)
+
+df_kec = df_kab.copy()
+
+if kabupaten:
+    df_kec = df_kec[
+        df_kec["KABUPATEN/KOTA"] == kabupaten
+    ]
+
+kecamatan = st.sidebar.selectbox(
+    "Kecamatan",
+    [""] + sorted(
+        df_kec["KECAMATAN"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+)
+if kecamatan:
+
+    hasil = df_wilayah[
+        (df_wilayah["PROVINSI"] == provinsi)
+        &
+        (df_wilayah["KABUPATEN/KOTA"] == kabupaten)
+        &
+        (df_wilayah["KECAMATAN"] == kecamatan)
+    ]
+
+    if not hasil.empty:
+
+        row = hasil.iloc[0]
+
+        lon = float(row["X"])
+        lat = float(row["Y"])
+
+        epsg, zona = get_utm_info(
+            lon,
+            lat
+        )
+
+        st.sidebar.success(
+            f"Zona UTM : {zona}"
+        )
+
+        st.sidebar.success(
+            f"EPSG : {epsg}"
+        )
 # =========================================================
 # FORMAT
 # =========================================================
