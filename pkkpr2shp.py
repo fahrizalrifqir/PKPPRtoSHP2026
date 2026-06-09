@@ -92,8 +92,6 @@ df_wilayah.columns = (
 st.write(df_wilayah.head())
 st.write("Jumlah data:", len(df_wilayah))
 
-st.write(df_wilayah.columns.tolist())
-
 st.sidebar.markdown("---")
 st.sidebar.subheader("🗺️ Zona UTM")
 
@@ -102,6 +100,7 @@ provinsi = st.sidebar.selectbox(
     [""] + sorted(
         df_wilayah["PROVINSI"]
         .dropna()
+        .astype(str)
         .unique()
         .tolist()
     )
@@ -113,12 +112,15 @@ if provinsi:
     df_kab = df_kab[
         df_kab["PROVINSI"] == provinsi
     ]
-
+else:
+    df_kab = df_wilayah
+    
 kabupaten = st.sidebar.selectbox(
     "Kabupaten/Kota",
     [""] + sorted(
         df_kab["KABUPATEN/KOTA"]
         .dropna()
+        .astype(str)
         .unique()
         .tolist()
     )
@@ -136,6 +138,7 @@ kecamatan = st.sidebar.selectbox(
     [""] + sorted(
         df_kec["KECAMATAN"]
         .dropna()
+        .astype(str)
         .unique()
         .tolist()
     )
