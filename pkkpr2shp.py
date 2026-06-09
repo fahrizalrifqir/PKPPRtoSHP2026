@@ -89,9 +89,6 @@ df_wilayah.columns = (
     .str.strip()
 )
 
-st.write(df_wilayah.head())
-st.write("Jumlah data:", len(df_wilayah))
-
 st.sidebar.markdown("---")
 st.sidebar.subheader("🗺️ Zona UTM")
 
@@ -143,16 +140,24 @@ kecamatan = st.sidebar.selectbox(
         .tolist()
     )
 )
-if kecamatan:
 
-    hasil = df_wilayah[
-        (df_wilayah["PROVINSI"] == provinsi)
-        &
-        (df_wilayah["KABUPATEN/KOTA"] == kabupaten)
-        &
-        (df_wilayah["KECAMATAN"] == kecamatan)
-    ]
+    hasil = df_wilayah.copy()
 
+    if provinsi:
+        hasil = hasil[
+            hasil["PROVINSI"] == provinsi
+        ]
+    
+    if kabupaten:
+        hasil = hasil[
+            hasil["KABUPATEN/KOTA"] == kabupaten
+        ]
+    
+    if kecamatan:
+        hasil = hasil[
+            hasil["KECAMATAN"] == kecamatan
+        ]
+    
     if not hasil.empty:
 
         row = hasil.iloc[0]
