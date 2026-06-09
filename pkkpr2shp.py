@@ -52,6 +52,12 @@ df_wilayah = pd.read_csv(
     encoding="utf-8"
 )
 
+df_wilayah.columns = (
+    df_wilayah.columns
+    .astype(str)
+    .str.strip()
+)
+
 st.write(df_wilayah.columns.tolist())
 
 st.sidebar.markdown("---")
