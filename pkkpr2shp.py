@@ -47,8 +47,39 @@ st.title("PKKPR → SHP + Overlay Tapak Proyek")
 st.markdown("---")
 
 DEBUG = st.sidebar.checkbox("Debug Mode", False)
+
+# =========================================================
+# FORMAT
+# =========================================================
+def format_angka_id(value):
+    try:
+        val = float(value)
+
+        if abs(val - round(val)) < 0.001:
+            return f"{int(round(val)):,}".replace(",", ".")
+
+        s = f"{val:,.2f}"
+        return s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+    except:
+        return str(value)
+
+# =========================================================
+# CRS
+# =========================================================
+def get_utm_info(lon, lat):
+    zone = int((lon + 180) / 6) + 1
+
+    if lat >= 0:
+        epsg = 32600 + zone
+    else:
+        epsg = 32700 + zone
+
+    return epsg, f"{zone}{'N' if lat >= 0 else 'S'}"
+
 df_wilayah = pd.read_csv(
     "Kecamatan.csv",
+    sep=";",
     encoding="utf-8"
 )
 
@@ -135,34 +166,6 @@ if kecamatan:
         st.sidebar.success(
             f"EPSG : {epsg}"
         )
-# =========================================================
-# FORMAT
-# =========================================================
-def format_angka_id(value):
-    try:
-        val = float(value)
-
-        if abs(val - round(val)) < 0.001:
-            return f"{int(round(val)):,}".replace(",", ".")
-
-        s = f"{val:,.2f}"
-        return s.replace(",", "X").replace(".", ",").replace("X", ".")
-
-    except:
-        return str(value)
-
-# =========================================================
-# CRS
-# =========================================================
-def get_utm_info(lon, lat):
-    zone = int((lon + 180) / 6) + 1
-
-    if lat >= 0:
-        epsg = 32600 + zone
-    else:
-        epsg = 32700 + zone
-
-    return epsg, f"{zone}{'N' if lat >= 0 else 'S'}"
 
 # =========================================================
 # PARSE
