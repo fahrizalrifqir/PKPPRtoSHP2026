@@ -141,29 +141,57 @@ kecamatan = st.sidebar.selectbox(
     )
 )
 
+st.sidebar.markdown("---")
+
 if kecamatan:
 
-    row = df_filter[
+    df_zona = df_filter[
         df_filter["KECAMATAN"] == kecamatan
-    ].iloc[0]
+    ].copy()
 
-    lon = float(row["X"])
-    lat = float(row["Y"])
+elif kabupaten:
 
-    epsg, zona = get_utm_info(
-        lon,
-        lat
-    )
+    df_zona = df_filter[
+        df_filter["KABUPATEN/KOTA"] == kabupaten
+    ].copy()
 
-    st.sidebar.markdown("---")
+elif provinsi:
 
-    st.sidebar.success(
-        f"Zona UTM : {zona}"
-    )
+    df_zona = df_filter[
+        df_filter["PROVINSI"] == provinsi
+    ].copy()
 
-    st.sidebar.success(
-        f"EPSG : {epsg}"
-    )
+else:
+    df_zona = pd.DataFrame()
+
+if not df_zona.empty:
+
+    zona_list = []
+
+    for _, row in df_zona.iterrows():
+
+        try:
+            lon = float(row["X"])
+            lat = float(row["Y"])
+
+            epsg, zona = get_utm_info(lon, lat)
+
+            zona_list.append(
+                (zona, epsg)
+            )
+
+        except:
+            pass
+
+    zona_unik = sorted(set(zona_list))
+
+    st.sidebar.markdown("### Zona UTM")
+
+    for zona, epsg in zona_unik:
+
+        st.sidebar.success(
+            f"Zona UTM : {zona} | EPSG : {epsg}"
+        )
 
 # =========================================================
 # PARSE
