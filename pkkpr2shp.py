@@ -89,6 +89,10 @@ df_wilayah.columns = (
     .str.strip()
 )
 
+# =========================================================
+# SIDEBAR ZONA UTM
+# =========================================================
+
 st.sidebar.markdown("---")
 st.sidebar.subheader("🗺️ Zona UTM")
 
@@ -103,19 +107,17 @@ provinsi = st.sidebar.selectbox(
     )
 )
 
-df_kab = df_wilayah.copy()
+df_filter = df_wilayah.copy()
 
 if provinsi:
-    df_kab = df_kab[
-        df_kab["PROVINSI"] == provinsi
+    df_filter = df_filter[
+        df_filter["PROVINSI"] == provinsi
     ]
-else:
-    df_kab = df_wilayah
-    
+
 kabupaten = st.sidebar.selectbox(
     "Kabupaten/Kota",
     [""] + sorted(
-        df_kab["KABUPATEN/KOTA"]
+        df_filter["KABUPATEN/KOTA"]
         .dropna()
         .astype(str)
         .unique()
@@ -123,17 +125,15 @@ kabupaten = st.sidebar.selectbox(
     )
 )
 
-df_kec = df_kab.copy()
-
 if kabupaten:
-    df_kec = df_kec[
-        df_kec["KABUPATEN/KOTA"] == kabupaten
+    df_filter = df_filter[
+        df_filter["KABUPATEN/KOTA"] == kabupaten
     ]
 
 kecamatan = st.sidebar.selectbox(
     "Kecamatan",
     [""] + sorted(
-        df_kec["KECAMATAN"]
+        df_filter["KECAMATAN"]
         .dropna()
         .astype(str)
         .unique()
@@ -141,42 +141,29 @@ kecamatan = st.sidebar.selectbox(
     )
 )
 
-    hasil = df_wilayah.copy()
+if kecamatan:
 
-    if provinsi:
-        hasil = hasil[
-            hasil["PROVINSI"] == provinsi
-        ]
-    
-    if kabupaten:
-        hasil = hasil[
-            hasil["KABUPATEN/KOTA"] == kabupaten
-        ]
-    
-    if kecamatan:
-        hasil = hasil[
-            hasil["KECAMATAN"] == kecamatan
-        ]
-    
-    if not hasil.empty:
+    row = df_filter[
+        df_filter["KECAMATAN"] == kecamatan
+    ].iloc[0]
 
-        row = hasil.iloc[0]
+    lon = float(row["X"])
+    lat = float(row["Y"])
 
-        lon = float(row["X"])
-        lat = float(row["Y"])
+    epsg, zona = get_utm_info(
+        lon,
+        lat
+    )
 
-        epsg, zona = get_utm_info(
-            lon,
-            lat
-        )
+    st.sidebar.markdown("---")
 
-        st.sidebar.success(
-            f"Zona UTM : {zona}"
-        )
+    st.sidebar.success(
+        f"Zona UTM : {zona}"
+    )
 
-        st.sidebar.success(
-            f"EPSG : {epsg}"
-        )
+    st.sidebar.success(
+        f"EPSG : {epsg}"
+    )
 
 # =========================================================
 # PARSE
