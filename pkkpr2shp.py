@@ -89,6 +89,9 @@ df_wilayah.columns = (
     .str.strip()
 )
 
+st.write(df_wilayah.head())
+st.write("Jumlah data:", len(df_wilayah))
+
 st.write(df_wilayah.columns.tolist())
 
 st.sidebar.markdown("---")
