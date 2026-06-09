@@ -223,108 +223,138 @@ def parse_coords_from_text_block(block):
             if xy:
                 coords.append(xy)
 
-    seen = set()
-    unique = []
-
-    for xy in coords:
-        key = (round(xy[0], 6), round(xy[1], 6))
-
-        if key not in seen:
-            unique.append(xy)
-            seen.add(key)
-
-    return unique
+    return coords
 
 
 def extract_tables_and_coords_from_pdf(uploaded_file):
+
+    uploaded_file.seek(0)
+
+    coords_with_no = []
+
+    # =====================================================
+    # PRIORITAS 1 : BACA SEMUA TABEL PDF
+    # =====================================================
+    with pdfplumber.open(uploaded_file) as pdf:
+
+        for page in pdf.pages:
+
+            try:
+                tables = page.extract_tables()
+            except:
+                tables = []
+
+            for table in tables:
+
+                if not table or len(table) < 2:
+                    continue
+
+                try:
+                    df = pd.DataFrame(
+                        table[1:],
+                        columns=table[0]
+                    )
+                except:
+                    continue
+
+                df.columns = [
+                    re.sub(r"\s+", " ", str(c)).strip().lower()
+                    for c in df.columns
+                ]
+
+                no_col = None
+                bujur_col = None
+                lintang_col = None
+
+                for c in df.columns:
+
+                    if "no" in c:
+                        no_col = c
+
+                    if any(x in c for x in [
+                        "bujur",
+                        "longitude",
+                        "long",
+                        "x"
+                    ]):
+                        bujur_col = c
+
+                    if any(x in c for x in [
+                        "lintang",
+                        "latitude",
+                        "lat",
+                        "y"
+                    ]):
+                        lintang_col = c
+
+                if not (bujur_col and lintang_col):
+                    continue
+
+                for _, row in df.iterrows():
+
+                    lon = parse_any_coordinate(
+                        row.get(bujur_col)
+                    )
+
+                    lat = parse_any_coordinate(
+                        row.get(lintang_col)
+                    )
+
+                    xy = normalize_lon_lat(
+                        lon,
+                        lat
+                    )
+
+                    if not xy:
+                        continue
+
+                    try:
+                        n = int(
+                            str(
+                                row.get(no_col)
+                            ).strip()
+                        )
+                    except:
+                        n = 999999
+
+                    coords_with_no.append(
+                        (n, xy)
+                    )
+
+    # =====================================================
+    # JIKA TABEL BERHASIL DIBACA
+    # =====================================================
+    if coords_with_no:
+
+        coords_with_no.sort(
+            key=lambda x: x[0]
+        )
+
+        coords = [
+            xy
+            for _, xy in coords_with_no
+        ]
+
+        return coords, True
+
+    # =====================================================
+    # FALLBACK TEXT PARSER
+    # =====================================================
     uploaded_file.seek(0)
 
     full_text = ""
 
     with pdfplumber.open(uploaded_file) as pdf:
         for page in pdf.pages:
-            full_text += (page.extract_text() or "") + "\n"
+            full_text += (
+                page.extract_text() or ""
+            ) + "\n"
 
-    # PRIORITAS 1
-    match = re.search(
-        r'Tabel\s+Koordinat\s+yang\s+disetujui(.*?)(Powered by TCPDF|Dokumen ini diterbitkan|$)',
-        full_text,
-        re.IGNORECASE | re.DOTALL
+    coords = parse_coords_from_text_block(
+        full_text
     )
 
-    if match:
-        coords = parse_coords_from_text_block(match.group(1))
-
-        if len(coords) >= 3:
-            return coords, True
-
-    # PRIORITAS 2
-    match = re.search(
-        r'Tabel\s+Koordinat\s+yang\s+dimohonkan(.*?)(Powered by TCPDF|Dokumen ini diterbitkan|$)',
-        full_text,
-        re.IGNORECASE | re.DOTALL
-    )
-
-    if match:
-        coords = parse_coords_from_text_block(match.group(1))
-
-        if len(coords) >= 3:
-            return coords, True
-
-    # FALLBACK TABLE
-    uploaded_file.seek(0)
-
-    coords_with_no = []
-
-    with pdfplumber.open(uploaded_file) as pdf:
-        for page in pdf.pages:
-            table = page.extract_table()
-
-            if not table:
-                continue
-
-            try:
-                df = pd.DataFrame(table[1:], columns=table[0])
-            except:
-                df = pd.DataFrame(table)
-
-            df.columns = [
-                re.sub(r"\s+", " ", str(c)).strip().lower()
-                for c in df.columns
-            ]
-
-            no_col = None
-            bujur_col = None
-            lintang_col = None
-
-            for c in df.columns:
-                if "no" in c:
-                    no_col = c
-
-                if any(x in c for x in ["bujur", "longitude", "long", "x"]):
-                    bujur_col = c
-
-                if any(x in c for x in ["lintang", "latitude", "lat", "y"]):
-                    lintang_col = c
-
-            if bujur_col and lintang_col:
-                for _, row in df.iterrows():
-                    lon = parse_any_coordinate(row.get(bujur_col))
-                    lat = parse_any_coordinate(row.get(lintang_col))
-
-                    xy = normalize_lon_lat(lon, lat)
-
-                    if xy:
-                        try:
-                            n = int(str(row.get(no_col)).strip())
-                        except:
-                            n = 99999
-
-                        coords_with_no.append((n, xy))
-
-    if coords_with_no:
-        coords_with_no.sort(key=lambda x: x[0])
-        coords = [x[1] for x in coords_with_no]
+    if len(coords) >= 3:
         return coords, True
 
     return [], False
@@ -385,10 +415,15 @@ def save_shapefile_layers(gdf_poly, gdf_points):
 # =========================================================
 st.subheader("Upload Dokumen PKKPR")
 
-uploaded = st.file_uploader(
-    "Upload PDF / SHP ZIP",
-    type=["pdf", "zip"]
-)
+col_upload, col_info = st.columns([3, 1])
+
+with col_upload:
+    uploaded = st.file_uploader(
+        "Upload PDF / SHP ZIP",
+        type=["pdf", "zip"]
+    )
+with col_info:
+    info_box = st.empty()
 
 gdf_polygon = None
 gdf_points = None
@@ -398,74 +433,84 @@ gdf_points = None
 if uploaded:
 
     if uploaded.name.lower().endswith(".pdf"):
+
         coords, ordered = extract_tables_and_coords_from_pdf(uploaded)
 
         if coords:
+
+            # ==========================
+            # TITIK KOORDINAT
+            # ==========================
             gdf_points = gpd.GeoDataFrame(
+                {
+                    "No": list(range(1, len(coords) + 1))
+                },
                 geometry=[Point(x, y) for x, y in coords],
                 crs="EPSG:4326"
             )
 
             coords_proc = coords.copy()
 
-            if not ordered:
-                coords_proc = sort_coords_clockwise(coords_proc)
-
+            # tutup polygon jika belum tertutup
             if coords_proc[0] != coords_proc[-1]:
                 coords_proc.append(coords_proc[0])
 
-            poly_candidate = None
-
             try:
+
+                # ==========================
+                # POLYGON ASLI DARI PDF
+                # ==========================
                 poly_candidate = Polygon(coords_proc)
 
-                if not poly_candidate.is_valid or poly_candidate.area == 0:
-                    poly_candidate = poly_candidate.buffer(0)
+                info_box.success(
+                    f"""
+                Jumlah titik : {len(coords)}
 
-                if not poly_candidate.is_valid or poly_candidate.area == 0:
-                    ls = LineString(coords_proc)
-                    polys, _, _, _ = polygonize_full(ls)
-                    poly_list = list(polys)
+                Polygon valid : {"Ya" if poly_candidate.is_valid else "Tidak"}
+                """
+                )
+               
+                # jika tidak valid tampilkan info
+                if not poly_candidate.is_valid:
 
-                    if poly_list:
-                        poly_candidate = max(
-                            poly_list,
-                            key=lambda p: p.area
+                    try:
+                        from shapely.validation import explain_validity
+
+                        st.warning(
+                            f"Polygon invalid : "
+                            f"{explain_validity(poly_candidate)}"
                         )
+                    except:
+                        pass
 
-            except Exception as e:
-                if DEBUG:
-                    st.write(e)
-
-            if (
-                poly_candidate is not None
-                and poly_candidate.is_valid
-                and poly_candidate.area > 0
-            ):
+                # ==========================
+                # BUAT GDF
+                # ==========================
                 gdf_polygon = gpd.GeoDataFrame(
                     geometry=[poly_candidate],
                     crs="EPSG:4326"
                 )
 
-                gdf_polygon = fix_geometry(gdf_polygon)
+            except Exception as e:
 
-                st.success(
-                    f"Berhasil membaca PDF PKKPR ({len(coords)} titik)"
+                st.error(
+                    f"Gagal membuat polygon : {e}"
                 )
 
-            else:
-                st.error("Polygon gagal dibuat dari PDF")
+                gdf_polygon = None
 
         else:
             st.error("Koordinat PDF tidak ditemukan")
 
     elif uploaded.name.lower().endswith(".zip"):
+
         gdf_polygon = read_shp_zip(uploaded)
 
         if gdf_polygon is not None:
-            gdf_polygon = fix_geometry(gdf_polygon)
 
             st.success("SHP PKKPR berhasil dibaca")
+
+            st.write("CRS :", gdf_polygon.crs)
 
             show_attributes(
                 gdf_polygon,
@@ -517,10 +562,16 @@ if gdf_polygon is not None:
 # =========================================================
 st.subheader("Upload SHP ZIP Tapak")
 
-uploaded_tapak = st.file_uploader(
-    "Upload SHP ZIP Tapak",
-    type=["zip"]
-)
+col_tapak_upload, col_tapak_info = st.columns([3, 1])
+
+with col_tapak_upload:
+    uploaded_tapak = st.file_uploader(
+        "Upload SHP ZIP Tapak",
+        type=["zip"]
+    )
+
+with col_tapak_info:
+    tapak_info = st.empty()
 
 gdf_tapak = None
 
@@ -530,7 +581,9 @@ if uploaded_tapak and gdf_polygon is not None:
     if gdf_tapak is not None:
         gdf_tapak = fix_geometry(gdf_tapak)
 
-        st.success("SHP Tapak berhasil dibaca")
+        tapak_info.success(
+            "SHP Tapak\nberhasil dibaca"
+        )
 
         show_attributes(
             gdf_tapak,
@@ -691,8 +744,8 @@ if gdf_polygon is not None:
         width = xmax - xmin
         height = ymax - ymin
 
-        padx = max(width * 0.08, 50)
-        pady = max(height * 0.08, 50)
+        padx = max(width * 0.20, 100)
+        pady = max(height * 0.20, 100)
 
         fig, ax = plt.subplots(
             figsize=(10, 10),
@@ -783,27 +836,63 @@ if gdf_polygon is not None:
             )
         ]
 
+        # ==========================================
+        # CARI SUDUT TERJAUH DARI POLYGON
+        # ==========================================
+        poly_centroid = gdf_poly_3857.unary_union.centroid
+        
+        corners = {
+            "upper left":  (xmin, ymax),
+            "upper right": (xmax, ymax),
+            "lower left":  (xmin, ymin),
+            "lower right": (xmax, ymin)
+        }
+        
+        max_dist = -1
+        best_corner = "upper right"
+        
+        for loc, (x, y) in corners.items():
+        
+            dist = (
+                (poly_centroid.x - x) ** 2 +
+                (poly_centroid.y - y) ** 2
+            )
+        
+            if dist > max_dist:
+                max_dist = dist
+                best_corner = loc
+        
         ax.legend(
             handles=legend_elements,
-            loc="upper right",
-            frameon=True
+            loc=best_corner,
+            frameon=True,
+            facecolor="white",
+            framealpha=0.9,
+            edgecolor="black"
         )
+        with st.spinner("Membuat peta PNG..."):
 
-        buf = io.BytesIO()
+                fig.canvas.draw()
 
-        plt.savefig(
-            buf,
-            format="png",
-            bbox_inches="tight",
-            dpi=300
-        )
-
-        buf.seek(0)
-        plt.close(fig)
-
+                buf = io.BytesIO()
+            
+                plt.savefig(
+                    buf,
+                    format="png",
+                    bbox_inches="tight",
+                    dpi=300
+                )
+            
+                buf.seek(0)
+            
+                png_bytes = buf.getvalue()
+                plt.close(fig)
+    
+        st.success("Peta PNG siap diunduh")
+        
         st.download_button(
             "⬇️ Download Peta PNG",
-            data=buf,
+            data=png_bytes,
             file_name="Peta_Overlay.png",
             mime="image/png"
         )
