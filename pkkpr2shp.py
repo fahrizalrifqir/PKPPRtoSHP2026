@@ -48,8 +48,11 @@ st.markdown("---")
 
 DEBUG = st.sidebar.checkbox("Debug Mode", False)
 df_wilayah = pd.read_csv(
-    "Kecamatan.csv"
+    "Kecamatan.csv",
+    encoding="utf-8"
 )
+
+st.write(df_wilayah.columns.tolist())
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🗺️ Zona UTM")
