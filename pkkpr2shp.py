@@ -259,18 +259,25 @@ def parse_any_coordinate(val):
 
     return dms_to_decimal(s)
 
-
 def normalize_lon_lat(a, b):
+
     if a is None or b is None:
         return None
 
-    if 95 <= a <= 141 and -11 <= b <= 6:
+    # lon lat normal
+    if 95 <= a <= 141 and -15 <= b <= 15:
         return (a, b)
 
-    if 95 <= b <= 141 and -11 <= a <= 6:
+    # lat lon tertukar
+    if 95 <= b <= 141 and -15 <= a <= 15:
         return (b, a)
 
+    # koordinat meter
+    if abs(a) > 1000 and abs(b) > 1000:
+        return (a, b)
+
     return None
+
 
 # =========================================================
 # GEOMETRY
@@ -529,9 +536,12 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
                 except:
                     no = 999999
 
-                coords_with_no.append(
-                    (no, (x, y))
-                )
+                xy = normalize_lon_lat(x, y)
+
+                if xy:
+                    coords_with_no.append(
+                        (no, xy)
+                    )
 
             except:
                 continue
