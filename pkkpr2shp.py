@@ -550,12 +550,12 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
             coord_type = detect_coordinate_type(
                 coords
             )
-            if coord_type != "WGS84":
-
-                st.warning(
-                    f"Koordinat {coord_type} terdeteksi. "
-                    "Saat ini hanya WGS84 yang didukung."
-                )
+            
+            return (
+                coords,
+                True,
+                coord_type
+            )
 
             return [], False, coord_type
 
@@ -689,12 +689,17 @@ if uploaded:
             # ==========================
             # TITIK KOORDINAT
             # ==========================
+            if coord_type == "WGS84":
+                source_crs = "EPSG:4326"
+            else:
+                source_crs = None
+            
             gdf_points = gpd.GeoDataFrame(
                 {
                     "No": list(range(1, len(coords) + 1))
                 },
                 geometry=[Point(x, y) for x, y in coords],
-                crs="EPSG:4326"
+                crs=source_crs
             )
 
             coords_proc = coords.copy()
@@ -738,7 +743,7 @@ if uploaded:
                 # ==========================
                 gdf_polygon = gpd.GeoDataFrame(
                     geometry=[poly_candidate],
-                    crs="EPSG:4326"
+                    crs=source_crs
                 )
 
             except Exception as e:
