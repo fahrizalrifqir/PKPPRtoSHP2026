@@ -558,7 +558,7 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
                     "Saat ini format TM3 belum didukung aplikasi."
                 )
             
-                return [], False, coord_type
+                return [], False, "TM3"
             
             return (
                 coords,
@@ -687,14 +687,6 @@ if uploaded:
 
         if coords:
 
-            ...
-        
-        elif coord_type == "TM3":
-            pass
-        
-        else:
-            st.error("Koordinat PDF tidak ditemukan")
-
             # ==========================
             # TITIK KOORDINAT
             # ==========================
@@ -764,7 +756,10 @@ if uploaded:
                 gdf_polygon = None
 
         else:
-            st.error("Koordinat PDF tidak ditemukan")
+            if coord_type == "TM3":
+                pass
+            else:
+                st.error("Koordinat PDF tidak ditemukan")
 
     elif uploaded.name.lower().endswith(".zip"):
 
