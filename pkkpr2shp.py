@@ -1038,7 +1038,7 @@ if gdf_polygon is not None:
                 edgecolor="red",
                 alpha=0.35,
                 linewidth=1.5,
-                zorder=4
+                zorder=5
             )
 
         gdf_poly_3857.plot(
@@ -1046,7 +1046,7 @@ if gdf_polygon is not None:
             facecolor="none",
             edgecolor="yellow",
             linewidth=2.5,
-            zorder=5
+            zorder=4
         )
 
         if gdf_points is not None and not gdf_points.empty:
