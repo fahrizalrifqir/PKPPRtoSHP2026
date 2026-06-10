@@ -1045,7 +1045,7 @@ if gdf_polygon is not None:
             ax=ax,
             facecolor="none",
             edgecolor="yellow",
-            linewidth=2.5,
+            linewidth=0.85,
             zorder=4
         )
 
