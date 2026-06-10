@@ -1091,6 +1091,16 @@ if gdf_polygon is not None:
         ax.axis("off")
 
         legend_elements = [
+            mlines.Line2D(
+                [],
+                [],
+                color="orange",
+                marker="o",
+                markeredgecolor="black",
+                linestyle="None",
+                markersize=8,
+                label="Titik PKKPR"
+            ),
             mpatches.Patch(
                 facecolor="none",
                 edgecolor="yellow",
@@ -1102,16 +1112,6 @@ if gdf_polygon is not None:
                 edgecolor="red",
                 alpha=0.4,
                 label="Tapak"
-            ),
-            mlines.Line2D(
-                [],
-                [],
-                color="orange",
-                marker="o",
-                markeredgecolor="black",
-                linestyle="None",
-                markersize=8,
-                label="Titik PKKPR"
             )
         ]
 
