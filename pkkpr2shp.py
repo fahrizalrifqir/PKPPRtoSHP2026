@@ -692,7 +692,7 @@ if uploaded:
             if coord_type == "WGS84":
                 source_crs = "EPSG:4326"
             else:
-                source_crs = None
+                source_crs = "EPSG:4326"
             
             gdf_points = gpd.GeoDataFrame(
                 {
