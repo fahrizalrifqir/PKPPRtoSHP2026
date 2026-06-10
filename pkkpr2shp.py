@@ -324,7 +324,66 @@ def sort_coords_clockwise(coords):
 # =========================================================
 def parse_coords_from_text_block(block):
     coords = []
+def get_table_priority(text):
 
+    text = str(text).lower()
+
+    if "tabel koordinat yang disetujui" in text:
+        return 1
+
+    if "tabel koordinat yang dimohonkan" in text:
+        return 2
+
+    if "tabel koordinat yang dimohonkan dan disetujui" in text:
+        return 3
+
+    return 999
+
+def detect_coordinate_type(coords):
+
+    if not coords:
+        return "UNKNOWN"
+
+    xs = [x for x, y in coords]
+    ys = [y for x, y in coords]
+
+    try:
+
+        maxx = max(xs)
+        minx = min(xs)
+
+        maxy = max(ys)
+        miny = min(ys)
+
+        # WGS84
+        if (
+            90 <= minx <= 150 and
+            90 <= maxx <= 150 and
+            -15 <= miny <= 15 and
+            -15 <= maxy <= 15
+        ):
+            return "WGS84"
+
+        # UTM
+        if (
+            100000 <= maxx <= 900000 and
+            1000000 <= maxy <= 10000000
+        ):
+            return "UTM"
+
+        # TM3 / Koordinat Meter
+        if (
+            maxx > 1000 and
+            maxy > 1000
+        ):
+            return "TM3"
+
+    except:
+        pass
+
+    return "UNKNOWN"
+
+    
     lines = block.splitlines()
 
     for line in lines:
@@ -346,14 +405,17 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
 
     uploaded_file.seek(0)
 
-    coords_with_no = []
+    candidate_tables = []
 
-    # =====================================================
-    # PRIORITAS 1 : BACA SEMUA TABEL PDF
-    # =====================================================
     with pdfplumber.open(uploaded_file) as pdf:
 
-        for page in pdf.pages:
+        for page_no, page in enumerate(pdf.pages):
+
+            page_text = page.extract_text() or ""
+
+            priority = get_table_priority(
+                page_text
+            )
 
             try:
                 tables = page.extract_tables()
@@ -365,103 +427,136 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
                 if not table or len(table) < 2:
                     continue
 
-                try:
-                    df = pd.DataFrame(
-                        table[1:],
-                        columns=table[0]
-                    )
-                except:
-                    continue
+                candidate_tables.append({
+                    "priority": priority,
+                    "page": page_no,
+                    "table": table
+                })
 
-                df.columns = [
-                    re.sub(r"\s+", " ", str(c)).strip().lower()
-                    for c in df.columns
-                ]
-
-                no_col = None
-                bujur_col = None
-                lintang_col = None
-
-                for c in df.columns:
-
-                    if "no" in c:
-                        no_col = c
-
-                    if any(x in c for x in [
-                        "bujur",
-                        "longitude",
-                        "long",
-                        "x"
-                    ]):
-                        bujur_col = c
-
-                    if any(x in c for x in [
-                        "lintang",
-                        "latitude",
-                        "lat",
-                        "y"
-                    ]):
-                        lintang_col = c
-
-                if not (bujur_col and lintang_col):
-                    continue
-
-                for _, row in df.iterrows():
-
-                    lon = parse_any_coordinate(
-                        row.get(bujur_col)
-                    )
-
-                    lat = parse_any_coordinate(
-                        row.get(lintang_col)
-                    )
-
-                    xy = normalize_lon_lat(
-                        lon,
-                        lat
-                    )
-
-                    if not xy:
-                        continue
-
-                    try:
-                        n = int(
-                            str(
-                                row.get(no_col)
-                            ).strip()
-                        )
-                    except:
-                        n = 999999
-
-                    coords_with_no.append(
-                        (n, xy)
-                    )
-
-    # =====================================================
-    # JIKA TABEL BERHASIL DIBACA
-    # =====================================================
-    if coords_with_no:
-
-        coords_with_no.sort(
-            key=lambda x: x[0]
+    candidate_tables.sort(
+        key=lambda x: (
+            x["priority"],
+            x["page"]
         )
+    )
 
-        coords = [
-            xy
-            for _, xy in coords_with_no
+    for item in candidate_tables:
+
+        table = item["table"]
+
+        try:
+
+            df = pd.DataFrame(
+                table[1:],
+                columns=table[0]
+            )
+
+        except:
+            continue
+
+        df.columns = [
+            re.sub(
+                r"\s+",
+                " ",
+                str(c)
+            ).strip().lower()
+            for c in df.columns
         ]
 
-        return coords, True
+        no_col = None
+        x_col = None
+        y_col = None
 
-    # =====================================================
+        for c in df.columns:
+
+            if "no" in c:
+                no_col = c
+
+            if any(k in c for k in [
+                "bujur",
+                "longitude",
+                "long",
+                "x"
+            ]):
+                x_col = c
+
+            if any(k in c for k in [
+                "lintang",
+                "latitude",
+                "lat",
+                "y"
+            ]):
+                y_col = c
+
+        if not (x_col and y_col):
+            continue
+
+        coords_with_no = []
+
+        for _, row in df.iterrows():
+
+            try:
+
+                x = parse_any_coordinate(
+                    row.get(x_col)
+                )
+
+                y = parse_any_coordinate(
+                    row.get(y_col)
+                )
+
+                if x is None or y is None:
+                    continue
+
+                try:
+                    no = int(
+                        str(
+                            row.get(no_col)
+                        ).strip()
+                    )
+                except:
+                    no = 999999
+
+                coords_with_no.append(
+                    (no, (x, y))
+                )
+
+            except:
+                continue
+
+        if len(coords_with_no) >= 3:
+
+            coords_with_no.sort(
+                key=lambda x: x[0]
+            )
+
+            coords = [
+                xy
+                for _, xy in coords_with_no
+            ]
+
+            coord_type = detect_coordinate_type(
+                coords
+            )
+
+            return (
+                coords,
+                True,
+                coord_type
+            )
+
+    # =================================================
     # FALLBACK TEXT PARSER
-    # =====================================================
+    # =================================================
+
     uploaded_file.seek(0)
 
     full_text = ""
 
     with pdfplumber.open(uploaded_file) as pdf:
+
         for page in pdf.pages:
+
             full_text += (
                 page.extract_text() or ""
             ) + "\n"
@@ -471,9 +566,22 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
     )
 
     if len(coords) >= 3:
-        return coords, True
 
-    return [], False
+        coord_type = detect_coordinate_type(
+            coords
+        )
+
+        return (
+            coords,
+            True,
+            coord_type
+        )
+
+    return (
+        [],
+        False,
+        "UNKNOWN"
+    )
 
 # =========================================================
 # SHP
@@ -550,7 +658,11 @@ if uploaded:
 
     if uploaded.name.lower().endswith(".pdf"):
 
-        coords, ordered = extract_tables_and_coords_from_pdf(uploaded)
+        coords, ordered, coord_type = (
+            extract_tables_and_coords_from_pdf(
+                uploaded
+            )
+        )
 
         if coords:
 
@@ -581,7 +693,9 @@ if uploaded:
                 info_box.success(
                     f"""
                 Jumlah titik : {len(coords)}
-
+                
+                Jenis koordinat : {coord_type}
+                
                 Polygon valid : {"Ya" if poly_candidate.is_valid else "Tidak"}
                 """
                 )
