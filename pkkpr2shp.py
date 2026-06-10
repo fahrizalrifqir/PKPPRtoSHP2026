@@ -557,14 +557,6 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
                 coord_type
             )
 
-            return [], False, coord_type
-
-            return (
-                coords,
-                True,
-                coord_type
-            )
-
     # =================================================
     # FALLBACK TEXT PARSER
     # =================================================
@@ -775,8 +767,9 @@ if uploaded:
 # =========================================================
 # LUAS + DOWNLOAD SHP
 # =========================================================
-if gdf_polygon is not None:
-and coord_type == "WGS84"
+if (
+    gdf_polygon is not None
+    and coord_type == "WGS84"
 ):
     centroid = gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
 
