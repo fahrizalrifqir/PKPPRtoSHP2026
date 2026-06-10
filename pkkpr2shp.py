@@ -323,7 +323,39 @@ def sort_coords_clockwise(coords):
 # PDF COORD PARSER
 # =========================================================
 def parse_coords_from_text_block(block):
+
     coords = []
+
+    lines = block.splitlines()
+
+    for line in lines:
+
+        nums = re.findall(
+            r'[-+]?\d+(?:\.\d+)?',
+            line
+        )
+
+        if len(nums) >= 2:
+
+            a = parse_any_coordinate(
+                nums[-2]
+            )
+
+            b = parse_any_coordinate(
+                nums[-1]
+            )
+
+            xy = normalize_lon_lat(
+                a,
+                b
+            )
+
+            if xy:
+                coords.append(xy)
+
+    return coords
+
+
 def get_table_priority(text):
 
     text = str(text).lower()
@@ -338,6 +370,7 @@ def get_table_priority(text):
         return 3
 
     return 999
+
 
 def detect_coordinate_type(coords):
 
@@ -355,7 +388,6 @@ def detect_coordinate_type(coords):
         maxy = max(ys)
         miny = min(ys)
 
-        # WGS84
         if (
             90 <= minx <= 150 and
             90 <= maxx <= 150 and
@@ -364,14 +396,12 @@ def detect_coordinate_type(coords):
         ):
             return "WGS84"
 
-        # UTM
         if (
             100000 <= maxx <= 900000 and
             1000000 <= maxy <= 10000000
         ):
             return "UTM"
 
-        # TM3 / Koordinat Meter
         if (
             maxx > 1000 and
             maxy > 1000
@@ -382,25 +412,7 @@ def detect_coordinate_type(coords):
         pass
 
     return "UNKNOWN"
-
     
-    lines = block.splitlines()
-
-    for line in lines:
-        nums = re.findall(r'[-+]?\d+(?:\.\d+)?', line)
-
-        if len(nums) >= 2:
-            a = parse_any_coordinate(nums[-2])
-            b = parse_any_coordinate(nums[-1])
-
-            xy = normalize_lon_lat(a, b)
-
-            if xy:
-                coords.append(xy)
-
-    return coords
-
-
 def extract_tables_and_coords_from_pdf(uploaded_file):
 
     uploaded_file.seek(0)
@@ -538,6 +550,14 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
             coord_type = detect_coordinate_type(
                 coords
             )
+            if coord_type != "WGS84":
+
+                st.warning(
+                    f"Koordinat {coord_type} terdeteksi. "
+                    "Saat ini hanya WGS84 yang didukung."
+                )
+
+            return [], False, coord_type
 
             return (
                 coords,
