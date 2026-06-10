@@ -776,6 +776,8 @@ if uploaded:
 # LUAS + DOWNLOAD SHP
 # =========================================================
 if gdf_polygon is not None:
+and coord_type == "WGS84"
+):
     centroid = gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
 
     utm_epsg, utm_zone = get_utm_info(
@@ -848,7 +850,11 @@ if uploaded_tapak and gdf_polygon is not None:
 # =========================================================
 # OVERLAY
 # =========================================================
-if gdf_polygon is not None and gdf_tapak is not None:
+if ( 
+    gdf_polygon is not None
+    and gdf_tapak is not None
+    and coord_type == "WGS84"
+):
     st.subheader("Analisis Overlay")
 
     centroid = gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
@@ -891,7 +897,10 @@ if gdf_polygon is not None and gdf_tapak is not None:
     # =========================================================
 # PREVIEW MAP
 # =========================================================
-if gdf_polygon is not None:
+if (
+    gdf_polygon is not None
+    and coord_type == "WGS84"
+):
     st.subheader("Preview Peta")
 
     if gdf_tapak is not None:
