@@ -550,6 +550,15 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
             coord_type = detect_coordinate_type(
                 coords
             )
+
+            if coord_type == "TM3":
+
+                st.warning(
+                    "Koordinat TM3 terdeteksi. "
+                    "Saat ini format TM3 belum didukung aplikasi."
+                )
+            
+                return [], False, coord_type
             
             return (
                 coords,
@@ -677,6 +686,14 @@ if uploaded:
         )
 
         if coords:
+
+            ...
+        
+        elif coord_type == "TM3":
+            pass
+        
+        else:
+            st.error("Koordinat PDF tidak ditemukan")
 
             # ==========================
             # TITIK KOORDINAT
