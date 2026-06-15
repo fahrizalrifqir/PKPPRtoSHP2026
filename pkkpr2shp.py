@@ -775,7 +775,7 @@ if uploaded:
             
             pilihan = st.selectbox(
                 "Pilih PKKPR",
-                range(len(results)),
+                opsi,
                 format_func=lambda x:
                     "PKKPR TOTAL"
                     if x == "PKKPR TOTAL"
