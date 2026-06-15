@@ -782,25 +782,22 @@ if uploaded:
                     else f"PKKPR {x+1} | {results[x]['luas_ha']:.2f} Ha"
             )
             
-            from shapely.ops import unary_union
+            if pilihan == "PKKPR TOTAL":
 
-                if pilihan == "PKKPR TOTAL":
-
-                    merged_poly = unary_union(total_polygons)
-                
-                    gdf_polygon = gpd.GeoDataFrame(
-                        geometry=[merged_poly],
-                        crs="EPSG:4326"
-                    )
-                
-                    coord_type = "WGS84"
-                
-                    gdf_points = None
-                
-                else:
-                
-                    coords = results[pilihan]["coords"]
-                    coord_type = results[pilihan]["coord_type"]
+                merged_poly = unary_union(total_polygons)
+            
+                gdf_polygon = gpd.GeoDataFrame(
+                    geometry=[merged_poly],
+                    crs="EPSG:4326"
+                )
+            
+                coord_type = "WGS84"
+                gdf_points = None
+            
+            else:
+            
+                coords = results[pilihan]["coords"]
+                coord_type = results[pilihan]["coord_type"]
         else:
             
             st.error("Koordinat PDF tidak ditemukan")
