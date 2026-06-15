@@ -707,8 +707,15 @@ if uploaded:
 
         if len(results) > 0:
         
-            coords = results[0]["coords"]
-            coord_type = results[0]["coord_type"]
+            pilihan = st.selectbox(
+                "Pilih PKKPR",
+                range(len(results)),
+                format_func=lambda x:
+                    f"PKKPR {x+1} | Halaman {results[x]['page']+1} | {len(results[x]['coords'])} titik"
+            )
+            
+            coords = results[pilihan]["coords"]
+            coord_type = results[pilihan]["coord_type"]
 
             # ==========================
             # TITIK KOORDINAT
