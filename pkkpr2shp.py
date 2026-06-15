@@ -808,8 +808,36 @@ if uploaded:
                     f"PKKPR {x+1} | Halaman {results[x]['page']+1} | {len(results[x]['coords'])} titik"
             )
             
-            coords = results[pilihan]["coords"]
-            coord_type = results[pilihan]["coord_type"]
+            from shapely.ops import unary_union
+
+            if pilihan == "TOTAL PKKPR":
+            
+                polys = []
+            
+                for r in results:
+            
+                    c = r["coords"].copy()
+            
+                    if c[0] != c[-1]:
+                        c.append(c[0])
+            
+                    polys.append(
+                        Polygon(c)
+                    )
+            
+                total_poly = unary_union(polys)
+            
+                gdf_polygon = gpd.GeoDataFrame(
+                    geometry=[total_poly],
+                    crs="EPSG:4326"
+                )
+            
+                coord_type = "WGS84"
+            
+            else:
+            
+                coords = results[pilihan]["coords"]
+                coord_type = results[pilihan]["coord_type"]
 
             # ==========================
             # TITIK KOORDINAT
