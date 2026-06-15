@@ -30,7 +30,7 @@ from shapely.geometry import (
 )
 
 from shapely.validation import make_valid
-from shapely.ops import polygonize_full
+from shapely.ops import polygonize_full, unary_union
 
 from streamlit_folium import st_folium
 from folium.plugins import Fullscreen
@@ -753,13 +753,33 @@ if uploaded:
         """
         )
 
-        if len(results) > 0:
+        total_polygons = []
+
+        for r in results:
         
+            c = r["coords"].copy()
+        
+            if c[0] != c[-1]:
+                c.append(c[0])
+        
+            try:
+                total_polygons.append(
+                    Polygon(c)
+                )
+            except:
+                pass
+        
+        if len(results) > 0:
+
+            opsi = ["PKKPR TOTAL"] + list(range(len(results)))
+            
             pilihan = st.selectbox(
                 "Pilih PKKPR",
                 range(len(results)),
                 format_func=lambda x:
-                    f"PKKPR {x+1} | Halaman {results[x]['page']+1} | {len(results[x]['coords'])} titik"
+                    "PKKPR TOTAL"
+                    if x == "PKKPR TOTAL"
+                    else f"PKKPR {x+1} | {results[x]['luas_ha']:.2f} Ha"
             )
             
             from shapely.ops import unary_union
@@ -790,9 +810,26 @@ if uploaded:
             
             else:
             
-                coords = results[pilihan]["coords"]
-                coord_type = results[pilihan]["coord_type"]
+                if pilihan == "PKKPR TOTAL":
 
+                    merged_poly = unary_union(total_polygons)
+                
+                    gdf_polygon = gpd.GeoDataFrame(
+                        geometry=[merged_poly],
+                        crs="EPSG:4326"
+                    )
+                
+                    coord_type = "WGS84"
+                
+                    gdf_points = None
+                
+                else:
+                
+                    coords = results[pilihan]["coords"]
+                    coord_type = results[pilihan]["coord_type"]
+                    
+        if pilihan != "PKKPR TOTAL":
+            
             # ==========================
             # TITIK KOORDINAT
             # ==========================
