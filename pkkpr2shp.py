@@ -574,7 +574,9 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
                 }
             )
 
-
+            if len(all_results) > 0:
+                return all_results
+                
     # =================================================
     # FALLBACK TEXT PARSER
     # =================================================
@@ -613,6 +615,7 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
         "UNKNOWN"
     )
 
+    return []
 # =========================================================
 # SHP
 # =========================================================
