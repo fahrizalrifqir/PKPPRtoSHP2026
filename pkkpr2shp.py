@@ -784,32 +784,6 @@ if uploaded:
             
             from shapely.ops import unary_union
 
-            if pilihan == "PKKPR TOTAL":
-            
-                polys = []
-            
-                for r in results:
-            
-                    c = r["coords"].copy()
-            
-                    if c[0] != c[-1]:
-                        c.append(c[0])
-            
-                    polys.append(
-                        Polygon(c)
-                    )
-            
-                total_poly = unary_union(polys)
-            
-                gdf_polygon = gpd.GeoDataFrame(
-                    geometry=[total_poly],
-                    crs="EPSG:4326"
-                )
-            
-                coord_type = "WGS84"
-            
-            else:
-            
                 if pilihan == "PKKPR TOTAL":
 
                     merged_poly = unary_union(total_polygons)
@@ -827,7 +801,9 @@ if uploaded:
                 
                     coords = results[pilihan]["coords"]
                     coord_type = results[pilihan]["coord_type"]
-                    
+        else:
+            
+            st.error("Koordinat PDF tidak ditemukan")
         if pilihan != "PKKPR TOTAL":
             
             # ==========================
@@ -898,11 +874,6 @@ if uploaded:
 
                 gdf_polygon = None
 
-        else:
-            if coord_type == "TM3":
-                pass
-            else:
-                st.error("Koordinat PDF tidak ditemukan")
 
     elif uploaded.name.lower().endswith(".zip"):
 
