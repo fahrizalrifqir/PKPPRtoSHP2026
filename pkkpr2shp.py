@@ -1124,8 +1124,8 @@ if gdf_polygon is not None:
         width = xmax - xmin
         height = ymax - ymin
 
-        padx = max(width * 0.20, 100)
-        pady = max(height * 0.20, 100)
+        padx = max(width * 0.01, 20)
+        pady = max(height * 0.01, 20)
 
         fig, ax = plt.subplots(
             figsize=(10, 10),
