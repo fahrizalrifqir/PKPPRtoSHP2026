@@ -784,7 +784,7 @@ if uploaded:
             
             from shapely.ops import unary_union
 
-            if pilihan == "TOTAL PKKPR":
+            if pilihan == "PKKPR TOTAL":
             
                 polys = []
             
