@@ -696,13 +696,58 @@ if uploaded:
             uploaded
         )
 
-        st.write("Jumlah hasil:", len(results))
+        total_luas_ha = 0
 
+        for r in results:
+        
+            coords = r["coords"].copy()
+        
+            if coords[0] != coords[-1]:
+                coords.append(coords[0])
+        
+            try:
+        
+                poly = Polygon(coords)
+        
+                gdf_tmp = gpd.GeoDataFrame(
+                    geometry=[poly],
+                    crs="EPSG:4326"
+                )
+        
+                centroid = poly.centroid
+        
+                utm_epsg, _ = get_utm_info(
+                    centroid.x,
+                    centroid.y
+                )
+        
+                luas_ha = (
+                    gdf_tmp.to_crs(utm_epsg)
+                    .area.iloc[0]
+                    / 10000
+                )
+        
+                r["luas_ha"] = luas_ha
+        
+                total_luas_ha += luas_ha
+        
+            except:
+                r["luas_ha"] = 0
+        
+        st.success(
+            f"""
+        Jumlah PKKPR unik : {len(results)}
+        
+        Total luas PKKPR : {format_angka_id(total_luas_ha)} Ha
+            """
+        )
+        
         for i, r in enumerate(results):
             st.write(
                 f"Hasil {i+1}",
                 "Halaman:", r["page"] + 1,
-                "Titik:", len(r["coords"])
+                "Titik:", len(r["coords"]),
+                "Luas:", f"{r['luas_ha']:.2f} Ha"
             )
 
         if len(results) > 0:
@@ -711,7 +756,7 @@ if uploaded:
                 "Pilih PKKPR",
                 range(len(results)),
                 format_func=lambda x:
-                    f"PKKPR {x+1} | Halaman {results[x]['page']+1} | {len(results[x]['coords'])} titik"
+                    f"PKKPR {x+1} | Halaman {results[x]['page']+1} | {results[x]['luas_ha']:.2f} Ha"
             )
             
             coords = results[pilihan]["coords"]
