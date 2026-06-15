@@ -460,6 +460,7 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
     )
 
     all_results = []
+    seen_coords = set()
     
     for item in candidate_tables:
 
@@ -566,13 +567,22 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
             if coord_type == "TM3":
                 continue
 
-            all_results.append(
-                {
-                    "coords": coords,
-                    "coord_type": coord_type,
-                    "page": item["page"]
-                }
+            coord_signature = tuple(
+                (round(x, 8), round(y, 8))
+                for x, y in coords
             )
+            
+            if coord_signature not in seen_coords:
+            
+                seen_coords.add(coord_signature)
+            
+                all_results.append(
+                    {
+                        "coords": coords,
+                        "coord_type": coord_type,
+                        "page": item["page"]
+                    }
+                )
 
     if len(all_results) > 0:
         return all_results
@@ -742,13 +752,52 @@ if uploaded:
             """
         )
         
-        for i, r in enumerate(results):
-            st.write(
-                f"Hasil {i+1}",
-                "Halaman:", r["page"] + 1,
-                "Titik:", len(r["coords"]),
-                "Luas:", f"{r['luas_ha']:.2f} Ha"
-            )
+        total_luas_ha = 0
+
+        for r in results:
+        
+            coords_tmp = r["coords"].copy()
+        
+            if coords_tmp[0] != coords_tmp[-1]:
+                coords_tmp.append(coords_tmp[0])
+        
+            try:
+        
+                poly = Polygon(coords_tmp)
+        
+                gdf_tmp = gpd.GeoDataFrame(
+                    geometry=[poly],
+                    crs="EPSG:4326"
+                )
+        
+                centroid = poly.centroid
+        
+                utm_epsg, _ = get_utm_info(
+                    centroid.x,
+                    centroid.y
+                )
+        
+                luas_ha = (
+                    gdf_tmp.to_crs(utm_epsg)
+                    .area.iloc[0]
+                    / 10000
+                )
+        
+                r["luas_ha"] = luas_ha
+        
+                total_luas_ha += luas_ha
+        
+            except:
+        
+                r["luas_ha"] = 0
+        
+        st.success(
+            f"""
+        Jumlah PKKPR unik : {len(results)}
+        
+        Total luas PKKPR : {format_angka_id(total_luas_ha)} Ha
+        """
+        )
 
         if len(results) > 0:
         
@@ -756,7 +805,7 @@ if uploaded:
                 "Pilih PKKPR",
                 range(len(results)),
                 format_func=lambda x:
-                    f"PKKPR {x+1} | Halaman {results[x]['page']+1} | {results[x]['luas_ha']:.2f} Ha"
+                    f"PKKPR {x+1} | Halaman {results[x]['page']+1} | {len(results[x]['coords'])} titik"
             )
             
             coords = results[pilihan]["coords"]
