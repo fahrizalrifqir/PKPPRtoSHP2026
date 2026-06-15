@@ -746,53 +746,7 @@ if uploaded:
         
         st.success(
             f"""
-        Jumlah PKKPR unik : {len(results)}
-        
-        Total luas PKKPR : {format_angka_id(total_luas_ha)} Ha
-            """
-        )
-        
-        total_luas_ha = 0
-
-        for r in results:
-        
-            coords_tmp = r["coords"].copy()
-        
-            if coords_tmp[0] != coords_tmp[-1]:
-                coords_tmp.append(coords_tmp[0])
-        
-            try:
-        
-                poly = Polygon(coords_tmp)
-        
-                gdf_tmp = gpd.GeoDataFrame(
-                    geometry=[poly],
-                    crs="EPSG:4326"
-                )
-        
-                centroid = poly.centroid
-        
-                utm_epsg, _ = get_utm_info(
-                    centroid.x,
-                    centroid.y
-                )
-        
-                luas_ha = (
-                    gdf_tmp.to_crs(utm_epsg)
-                    .area.iloc[0]
-                    / 10000
-                )
-        
-                r["luas_ha"] = luas_ha
-        
-                total_luas_ha += luas_ha
-        
-            except:
-        
-                r["luas_ha"] = 0
-        
-        st.success(
-            f"""
+       
         Jumlah PKKPR unik : {len(results)}
         
         Total luas PKKPR : {format_angka_id(total_luas_ha)} Ha
