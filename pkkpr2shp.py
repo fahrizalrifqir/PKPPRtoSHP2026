@@ -695,7 +695,16 @@ if uploaded:
         results = extract_tables_and_coords_from_pdf(
             uploaded
         )
-        
+
+        st.write("Jumlah hasil:", len(results))
+
+        for i, r in enumerate(results):
+            st.write(
+                f"Hasil {i+1}",
+                "Halaman:", r["page"] + 1,
+                "Titik:", len(r["coords"])
+            )
+
         if len(results) > 0:
         
             coords = results[0]["coords"]
