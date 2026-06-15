@@ -768,6 +768,24 @@ if uploaded:
                 )
             except:
                 pass
+
+        unique_points = set()
+
+        for r in results:
+        
+            for x, y in r["coords"]:
+        
+                unique_points.add(
+                    (round(x, 8), round(y, 8))
+                )
+        
+        gdf_points_total = gpd.GeoDataFrame(
+            geometry=[
+                Point(x, y)
+                for x, y in unique_points
+            ],
+            crs="EPSG:4326"
+        )
         
         if len(results) > 0:
 
@@ -792,7 +810,7 @@ if uploaded:
                 )
             
                 coord_type = "WGS84"
-                gdf_points = None
+                gdf_points = gdf_points_total
             
             else:
             
