@@ -459,6 +459,8 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
         )
     )
 
+    all_results = []
+    
     for item in candidate_tables:
 
         table = item["table"]
@@ -562,19 +564,20 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
             )
 
             if coord_type == "TM3":
+                continue
 
-                st.warning(
-                    "Koordinat TM3 terdeteksi. "
-                    "Saat ini format TM3 belum didukung aplikasi."
-                )
-            
-                return [], False, "TM3"
-            
-            return (
-                coords,
-                True,
-                coord_type
+            all_results.append(
+                {
+                    "coords": coords,
+                    "coord_type": coord_type,
+                    "page": item["page"]
+                }
             )
+
+            if len(all_results) > 0:
+                return all_results
+            
+            return []
 
     # =================================================
     # FALLBACK TEXT PARSER
@@ -690,10 +693,8 @@ if uploaded:
 
     if uploaded.name.lower().endswith(".pdf"):
 
-        coords, ordered, coord_type = (
-            extract_tables_and_coords_from_pdf(
-                uploaded
-            )
+        results = extract_tables_and_coords_from_pdf(
+            uploaded
         )
 
         if coords:
