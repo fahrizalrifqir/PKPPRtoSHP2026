@@ -574,10 +574,6 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
                 }
             )
 
-            if len(all_results) > 0:
-                return all_results
-            
-            return []
 
     # =================================================
     # FALLBACK TEXT PARSER
@@ -696,8 +692,11 @@ if uploaded:
         results = extract_tables_and_coords_from_pdf(
             uploaded
         )
-
-        if coords:
+        
+        if len(results) > 0:
+        
+            coords = results[0]["coords"]
+            coord_type = results[0]["coord_type"]
 
             # ==========================
             # TITIK KOORDINAT
