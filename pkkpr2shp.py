@@ -588,7 +588,7 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
         
 
     if len(all_results) > 0:
-    return all_results
+        return all_results
     
                 
     # =================================================
