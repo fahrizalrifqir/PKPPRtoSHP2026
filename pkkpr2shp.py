@@ -774,9 +774,15 @@ if uploaded:
                 c.append(c[0])
         
             try:
-                total_polygons.append(
+                poly = make_valid(
                     Polygon(c)
                 )
+                
+                if (
+                    not poly.is_empty and
+                    poly.geom_type in ["Polygon", "MultiPolygon"]
+                ):
+                    total_polygons.append(poly)
             except:
                 pass
 
@@ -813,28 +819,8 @@ if uploaded:
             
             if pilihan == "PKKPR TOTAL":
 
-                safe_polys = []
-            
-                for p in total_polygons:
-            
-                    try:
-            
-                        p = make_valid(p)
-            
-                        if not p.is_empty:
-                            safe_polys.append(p)
-            
-                    except:
-                        pass
-            
-                if len(safe_polys) == 0:
-                    st.error("Tidak ada polygon valid")
-                    st.stop()
-            
-                merged_poly = unary_union(safe_polys)
-            
                 gdf_polygon = gpd.GeoDataFrame(
-                    geometry=[merged_poly],
+                    geometry=total_polygons,
                     crs="EPSG:4326"
                 )
             
