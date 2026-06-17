@@ -697,30 +697,48 @@ if gdf_polygon is not None and coord_type == "WGS84":
             xmin, ymin, xmax, ymax = extent_gdf.total_bounds
             width = xmax - xmin
             height = ymax - ymin
-            padx = max(width * 0.01, 20)
-            pady = max(height * 0.01, 20)
+            padx = max(width * 0.20, 100)
+            pady = max(height * 0.20, 100)
 
-            fig, ax = plt.subplots(figsize=(10, 10), dpi=300)
+            x0 = xmin - padx
+            x1 = xmax + padx
+            y0 = ymin - pady
+            y1 = ymax + pady
 
+            fig, ax = plt.subplots(figsize=(10, 10), dpi=150)
+
+            # 1. Set extent sebelum basemap
+            ax.set_xlim(x0, x1)
+            ax.set_ylim(y0, y1)
+
+            # 2. Basemap dengan reset_extent=False agar extent tidak berubah
+            basemap_ok = False
+            for source in [ctx.providers.Esri.WorldImagery, ctx.providers.OpenStreetMap.Mapnik]:
+                try:
+                    ctx.add_basemap(ax, source=source, crs="EPSG:3857", reset_extent=False)
+                    basemap_ok = True
+                    break
+                except Exception:
+                    continue
+            if not basemap_ok:
+                ax.set_facecolor("#c9e8f5")
+
+            # 3. Plot vektor di atas basemap
             if gdf_tapak_3857 is not None:
                 gdf_tapak_3857.plot(ax=ax, facecolor="red", edgecolor="red", alpha=0.35, linewidth=1.5, zorder=5)
 
-            gdf_poly_3857.plot(ax=ax, facecolor="none", edgecolor="yellow", linewidth=0.5, zorder=4)
+            gdf_poly_3857.plot(ax=ax, facecolor="none", edgecolor="yellow", linewidth=2, zorder=4)
 
             if gdf_points is not None and not gdf_points.empty:
                 gdf_points_3857 = gdf_points.to_crs(3857)
                 gdf_points_3857.plot(ax=ax, color="orange", edgecolor="black", markersize=30, zorder=6)
 
-            ax.set_xlim(xmin - padx, xmax + padx)
-            ax.set_ylim(ymin - pady, ymax + pady)
-
-            try:
-                ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, crs=gdf_poly_3857.crs)
-            except:
-                ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik, crs=gdf_poly_3857.crs)
-
-            ax.set_title("Peta Kesesuaian Tapak Proyek dengan PKKPR", fontsize=14)
+            # 4. Paksa extent kembali ke nilai awal (plot() bisa menggeser)
+            ax.set_xlim(x0, x1)
+            ax.set_ylim(y0, y1)
+            ax.set_aspect("equal")
             ax.axis("off")
+            ax.set_title("Peta Kesesuaian Tapak Proyek dengan PKKPR", fontsize=12, pad=10)
 
             legend_elements = [
                 mlines.Line2D([], [], color="orange", marker="o", markeredgecolor="black", linestyle="None", markersize=8, label="Titik PKKPR"),
@@ -743,15 +761,14 @@ if gdf_polygon is not None and coord_type == "WGS84":
                     max_dist = dist
                     best_corner = loc
 
-            ax.legend(handles=legend_elements, loc=best_corner, frameon=True, facecolor="white", framealpha=0.9, edgecolor="black")
+            ax.legend(handles=legend_elements, loc=best_corner, frameon=True,
+                      facecolor="white", framealpha=0.9, edgecolor="black", fontsize=9)
 
-            with st.spinner("Membuat peta PNG..."):
-                fig.canvas.draw()
-                buf = io.BytesIO()
-                plt.savefig(buf, format="png", bbox_inches="tight", dpi=300)
-                buf.seek(0)
-                png_bytes = buf.getvalue()
-                plt.close(fig)
+            buf = io.BytesIO()
+            plt.savefig(buf, format="png", bbox_inches="tight", dpi=150)
+            buf.seek(0)
+            png_bytes = buf.getvalue()
+            plt.close(fig)
 
             st.download_button(
                 "⬇️ Download Peta PNG",
