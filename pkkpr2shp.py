@@ -846,8 +846,16 @@ if uploaded:
                 # ==========================
                 # POLYGON ASLI DARI PDF
                 # ==========================
-                poly_candidate = Polygon(coords_proc)
+    
+                from shapely.validation import make_valid
 
+                poly_candidate = make_valid(
+                    Polygon(coords_proc)
+                )
+               
+                st.write("Geom Type :", poly_candidate.geom_type)
+                st.write("Valid :", poly_candidate.is_valid)
+                st.write("Empty :", poly_candidate.is_empty)
                 info_box.success(
                     f"""
                 Jumlah titik : {len(coords)}
