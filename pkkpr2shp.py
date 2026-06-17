@@ -461,6 +461,8 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
 
     all_results = []
     seen_coords = set()
+    all_coords_global = []
+    all_no_global = []
     
     for item in candidate_tables:
 
@@ -552,41 +554,35 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
         st.write("Jumlah titik tabel:", len(coords_with_no))
 
         if len(coords_with_no) >= 3:
+        
+            all_no_global.extend(coords_with_no)
 
-            coords_with_no.sort(
-                key=lambda x: x[0]
-            )
+    if len(all_no_global) > 0:
 
-            coords = [
-                xy
-                for _, xy in coords_with_no
-            ]
-
-            coord_type = detect_coordinate_type(
-                coords
-            )
-
-            if coord_type == "TM3":
+        all_no_global.sort(
+            key=lambda x: x[0]
+        )
+    
+        coords = []
+    
+        nomor_terakhir = None
+    
+        for no, xy in all_no_global:
+    
+            if nomor_terakhir == no:
                 continue
-
-            coord_signature = tuple(
-                (round(x, 8), round(y, 8))
-                for x, y in coords
-            )
-            
-            if coord_signature not in seen_coords:
-            
-                seen_coords.add(coord_signature)
-            
-                all_results.append(
-                    {
-                        "coords": coords,
-                        "coord_type": coord_type,
-                        "page": item["page"]
-                    }
-                )
-
-    if len(all_results) > 0:
+    
+            coords.append(xy)
+            nomor_terakhir = no
+    
+        coord_type = detect_coordinate_type(coords)
+    
+        all_results = [{
+            "coords": coords,
+            "coord_type": coord_type,
+            "page": 0
+        }]
+    
         return all_results
                 
     # =================================================
