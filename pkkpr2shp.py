@@ -612,8 +612,15 @@ if gdf_polygon is not None and coord_type == "WGS84":
     bounds = combined_preview.total_bounds  # [minx, miny, maxx, maxy]
     centroid = combined_preview.geometry.unary_union.centroid
 
-    # Inisialisasi peta — zoom/center akan di-override oleh fit_bounds
-    m = folium.Map(location=[centroid.y, centroid.x], zoom_start=14, tiles=None)
+    # Key unik berdasarkan bounds — paksa st_folium re-render saat data berubah
+    map_key = f"map_{bounds[0]:.6f}_{bounds[1]:.6f}_{bounds[2]:.6f}_{bounds[3]:.6f}"
+
+    m = folium.Map(
+        location=[centroid.y, centroid.x],
+        zoom_start=14,
+        tiles=None,
+        zoom_control=True,
+    )
     Fullscreen().add_to(m)
     folium.TileLayer(xyz.Esri.WorldImagery, name="Esri Satellite").add_to(m)
 
@@ -658,7 +665,7 @@ if gdf_polygon is not None and coord_type == "WGS84":
     ])
 
     folium.LayerControl().add_to(m)
-    st_folium(m, width="100%", height=650)
+    st_folium(m, width="100%", height=650, key=map_key, returned_objects=[])
 
     st.markdown("---")
 
