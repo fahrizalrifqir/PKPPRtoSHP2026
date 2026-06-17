@@ -351,7 +351,32 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
             if coord_type == "TM3":
                 continue
             coord_signature = tuple((round(x, 8), round(y, 8)) for x, y in coords)
-            if coord_signature not in seen_coords:
+            if coord_signature in seen_coords:
+                continue
+
+            # Cek apakah tabel ini adalah lanjutan dari tabel sebelumnya
+            # (tabel multi-halaman yang dipecah — nomor urut lanjut dari tabel sebelumnya)
+            merged = False
+            if all_results:
+                prev = all_results[-1]
+                prev_coords = prev["coords"]
+                # Cek apakah titik pertama tabel ini dekat dengan titik terakhir tabel sebelumnya
+                # atau nomor koordinat lanjut (tidak mulai dari 1)
+                first_no = coords_with_no[0][0] if coords_with_no else 1
+                if first_no > 1 and abs(item["page"] - prev.get("page", 0)) <= 2:
+                    # Gabung ke tabel sebelumnya
+                    merged_coords = prev_coords + coords
+                    # Hapus duplikat berurutan
+                    deduped = [merged_coords[0]]
+                    for c in merged_coords[1:]:
+                        if (round(c[0], 6), round(c[1], 6)) != (round(deduped[-1][0], 6), round(deduped[-1][1], 6)):
+                            deduped.append(c)
+                    prev["coords"] = deduped
+                    prev["coord_type"] = detect_coordinate_type(deduped)
+                    seen_coords.add(coord_signature)
+                    merged = True
+
+            if not merged:
                 seen_coords.add(coord_signature)
                 all_results.append({"coords": coords, "coord_type": coord_type, "page": item["page"], "nama": f"PKKPR {len(all_results)+1}"})
 
