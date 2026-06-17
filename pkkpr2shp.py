@@ -513,82 +513,126 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
         if not (x_col and y_col):
             continue
 
-        coords_with_no = []
+    # =====================================================
+# IDENTIFIKASI KOLOM
+# =====================================================
 
-        for _, row in df.iterrows():
-        
-            try:
-        
-                x = parse_any_coordinate(
-                    row.get(x_col)
-                )
-        
-                y = parse_any_coordinate(
-                    row.get(y_col)
-                )
-        
-                if x is None or y is None:
-                    continue
-        
-                try:
-                    no = int(
-                        str(
-                            row.get(no_col)
-                        ).strip()
-                    )
-                except:
-                    no = 999999
-        
-                xy = normalize_lon_lat(x, y)
-        
-                if xy:
-                    coords_with_no.append(
-                        (no, xy)
-                    )
-        
-            except:
-                continue
+no_col = None
+x_col = None
+y_col = None
+ket_col = None
 
-        st.write("Jumlah titik tabel:", len(coords_with_no))
+for c in df.columns:
 
-        if len(coords_with_no) >= 3:
-        
-            coords_with_no.sort(
-                key=lambda x: x[0]
-            )
-        
-            coords = [
-                xy
-                for _, xy in coords_with_no
-            ]
-        
-            coord_type = detect_coordinate_type(
-                coords
-            )
-        
-            if coord_type == "TM3":
-                continue
-        
-            coord_signature = tuple(
-                (round(x, 8), round(y, 8))
-                for x, y in coords
-            )
-        
-            if coord_signature not in seen_coords:
-        
-                seen_coords.add(coord_signature)
-        
-                all_results.append(
-                    {
-                        "coords": coords,
-                        "coord_type": coord_type,
-                        "page": item["page"]
-                    }
-                )
-        
+    if "no" in c:
+        no_col = c
 
-    if len(all_results) > 0:
-        return all_results
+    if any(k in c for k in [
+        "bujur",
+        "longitude",
+        "long",
+        "x"
+    ]):
+        x_col = c
+
+    if any(k in c for k in [
+        "lintang",
+        "latitude",
+        "lat",
+        "y"
+    ]):
+        y_col = c
+
+    if "keterangan" in c:
+        ket_col = c
+
+if not (x_col and y_col):
+    continue
+
+
+# =====================================================
+# GROUP BERDASARKAN NAMA SUMUR
+# =====================================================
+
+groups = {}
+last_ket = None
+
+for _, row in df.iterrows():
+
+    try:
+
+        x = parse_any_coordinate(
+            row.get(x_col)
+        )
+
+        y = parse_any_coordinate(
+            row.get(y_col)
+        )
+
+        if x is None or y is None:
+            continue
+
+        xy = normalize_lon_lat(x, y)
+
+        if not xy:
+            continue
+
+        ket = ""
+
+        if ket_col:
+
+            val = row.get(ket_col)
+
+            if pd.notna(val):
+
+                ket = str(val).strip()
+
+                if ket:
+                    last_ket = ket
+
+        if not last_ket:
+            continue
+
+        groups.setdefault(
+            last_ket,
+            []
+        ).append(xy)
+
+    except:
+        continue
+
+
+# =====================================================
+# MASUKKAN KE HASIL
+# =====================================================
+
+for nama_sumur, coords in groups.items():
+
+    if len(coords) < 4:
+        continue
+
+    coord_type = detect_coordinate_type(
+        coords
+    )
+
+    coord_signature = tuple(
+        (round(x, 8), round(y, 8))
+        for x, y in coords
+    )
+
+    if coord_signature in seen_coords:
+        continue
+
+    seen_coords.add(coord_signature)
+
+    all_results.append(
+        {
+            "nama": nama_sumur,
+            "coords": coords,
+            "coord_type": coord_type,
+            "page": item["page"]
+        }
+    )
     
                 
     # =================================================
@@ -814,9 +858,7 @@ if uploaded:
                 format_func=lambda x:
                     "PKKPR TOTAL"
                     if x == "PKKPR TOTAL"
-                    else f"PKKPR {x+1} | {results[x]['luas_ha']:.2f} Ha"
-            )
-            
+                    else f"{results[x]['nama']} | {results[x]['luas_ha']:.2f} Ha"
             if pilihan == "PKKPR TOTAL":
 
                 gdf_polygon = gpd.GeoDataFrame(
