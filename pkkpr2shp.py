@@ -675,10 +675,7 @@ if gdf_polygon is not None and coord_type == "WGS84":
             centroid_e = geom.centroid
             utm_epsg_e, utm_zone_e = get_utm_info(centroid_e.x, centroid_e.y)
             luas_utm = gdf_polygon.to_crs(utm_epsg_e).area.sum()
-            luas_merc = gdf_polygon.to_crs(3857).area.sum()
-
-            st.write(f"Luas UTM {utm_zone_e}: {format_angka_id(luas_utm)} m² ({format_angka_id(luas_utm/10000)} Ha)")
-            st.write(f"Luas Mercator: {format_angka_id(luas_merc)} m² ({format_angka_id(luas_merc/10000)} Ha)")
+            st.write(f"Luas (UTM {utm_zone_e}) : {format_angka_id(luas_utm)} m² / {format_angka_id(luas_utm/10000)} Ha")
 
             zip_bytes = save_shapefile_layers(gdf_polygon, gdf_points)
             st.download_button(
