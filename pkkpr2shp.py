@@ -11,6 +11,7 @@ import pdfplumber
 import folium
 import contextily as ctx
 import xyzservices.providers as xyz
+import matplotlib.subplots as plt
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
@@ -341,7 +342,6 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
         groups = {}
         last_ket = None
 
-        # Fallback grouping logic based on provided script
         for _, row in df.iterrows():
             try:
                 x = parse_any_coordinate(row.get(x_col))
@@ -352,7 +352,6 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
                 if not xy:
                     continue
 
-                # Identifikasi Kolom Grouping
                 ket = ""
                 if ket_col:
                     val = row.get(ket_col)
@@ -374,9 +373,6 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
             except:
                 continue
 
-        st.write("Jumlah titik tabel:", len(coords_with_no))
-
-        # Masukkan Ke Hasil dari Groups (jika ada ket_col)
         if groups:
             for nama_sumur, coords in groups.items():
                 if len(coords) < 4:
@@ -393,7 +389,6 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
                     "page": item["page"]
                 })
         
-        # Original extraction
         if len(coords_with_no) >= 3:
             coords_with_no.sort(key=lambda x: x[0])
             coords = [xy for _, xy in coords_with_no]
@@ -476,7 +471,6 @@ def save_shapefile_layers(gdf_poly, gdf_points):
 # =========================================================
 tab1, tab2, tab3 = st.tabs(["📂 1. Input Data", "🔍 2. Analisis & Peta", "📥 3. Hasil Export"])
 
-# Variabel Global
 gdf_polygon = None
 gdf_points = None
 gdf_tapak = None
@@ -508,10 +502,6 @@ with tab1:
     if uploaded:
         if uploaded.name.lower().endswith(".pdf"):
             results = extract_tables_and_coords_from_pdf(uploaded)
-            st.write("Jumlah hasil:", len(results))
-
-            for i, r in enumerate(results):
-                st.write(f"PKKPR {i+1}", len(r["coords"]))
             
             total_luas_ha = 0
             for r in results:
@@ -599,7 +589,6 @@ with tab1:
                     st.write("Empty :", poly_candidate.is_empty)
                     info_box.success(
                         f"""
-                        Jumlah titik : {len(coords)}
                         Jenis koordinat : {coord_type}
                         Polygon valid : {"Ya" if poly_candidate.is_valid else "Tidak"}
                         """
