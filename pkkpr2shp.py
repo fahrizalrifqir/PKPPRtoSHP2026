@@ -432,9 +432,7 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
 
             page_text = page.extract_text() or ""
 
-            priority = get_table_priority(
-                page_text
-            )
+            priority = get_table_priority(page_text)
 
             try:
                 tables = page.extract_tables()
@@ -512,6 +510,129 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
 
         if not (x_col and y_col):
             continue
+
+        coords_with_no = []
+
+        for _, row in df.iterrows():
+
+            try:
+
+                x = parse_any_coordinate(
+                    row.get(x_col)
+                )
+
+                y = parse_any_coordinate(
+                    row.get(y_col)
+                )
+
+                if x is None or y is None:
+                    continue
+
+                xy = normalize_lon_lat(x, y)
+
+                if not xy:
+                    continue
+
+                no = len(coords_with_no) + 1
+
+                if no_col:
+
+                    try:
+                        no = int(
+                            str(
+                                row.get(no_col)
+                            ).strip()
+                        )
+                    except:
+                        pass
+
+                coords_with_no.append(
+                    (no, xy)
+                )
+
+            except:
+                continue
+
+        st.write(
+            "Jumlah titik tabel:",
+            len(coords_with_no)
+        )
+
+        if len(coords_with_no) >= 3:
+
+            coords_with_no.sort(
+                key=lambda x: x[0]
+            )
+
+            coords = [
+                xy
+                for _, xy in coords_with_no
+            ]
+
+            coord_type = detect_coordinate_type(
+                coords
+            )
+
+            if coord_type == "TM3":
+                continue
+
+            coord_signature = tuple(
+                (round(x, 8), round(y, 8))
+                for x, y in coords
+            )
+
+            if coord_signature not in seen_coords:
+
+                seen_coords.add(
+                    coord_signature
+                )
+
+                all_results.append(
+                    {
+                        "coords": coords,
+                        "coord_type": coord_type,
+                        "page": item["page"],
+                        "nama": f"PKKPR {len(all_results)+1}"
+                    }
+                )
+
+    if len(all_results) > 0:
+        return all_results
+
+    # ==========================================
+    # FALLBACK TEXT PARSER
+    # ==========================================
+
+    uploaded_file.seek(0)
+
+    full_text = ""
+
+    with pdfplumber.open(uploaded_file) as pdf:
+
+        for page in pdf.pages:
+
+            full_text += (
+                page.extract_text() or ""
+            ) + "\n"
+
+    coords = parse_coords_from_text_block(
+        full_text
+    )
+
+    if len(coords) >= 3:
+
+        coord_type = detect_coordinate_type(
+            coords
+        )
+
+        return [{
+            "coords": coords,
+            "coord_type": coord_type,
+            "page": 0,
+            "nama": "PKKPR 1"
+        }]
+
+    return []
 
     # =====================================================
 # IDENTIFIKASI KOLOM
@@ -859,6 +980,7 @@ if uploaded:
                     "PKKPR TOTAL"
                     if x == "PKKPR TOTAL"
                     else f"{results[x]['nama']} | {results[x]['luas_ha']:.2f} Ha"
+            )
             if pilihan == "PKKPR TOTAL":
 
                 gdf_polygon = gpd.GeoDataFrame(
