@@ -425,12 +425,13 @@ col_upload, col_tapak_upload = st.columns(2)
 with col_upload:
     st.write("**Dokumen PKKPR**")
     uploaded = st.file_uploader("Upload PDF / SHP ZIP", type=["pdf", "zip"])
-    info_box = st.empty()
+    info_box = st.empty()       # ← luas PKKPR muncul di sini
+    pkkpr_luas_box = st.empty() # ← jumlah & total luas muncul di sini
 
 with col_tapak_upload:
     st.write("**Tapak Proyek**")
     uploaded_tapak = st.file_uploader("Upload SHP ZIP Tapak", type=["zip"])
-    tapak_info = st.empty()
+    tapak_info = st.empty()     # ← info tapak muncul di sini
 
 st.markdown("---")
 
@@ -457,7 +458,7 @@ if uploaded:
             except:
                 r["luas_ha"] = 0
 
-        st.success(
+        pkkpr_luas_box.success(
             f"Jumlah PKKPR unik : {len(results)} | "
             f"Total luas PKKPR : {format_angka_id(total_luas_ha)} Ha"
         )
@@ -543,9 +544,15 @@ if uploaded:
     elif uploaded.name.lower().endswith(".zip"):
         gdf_polygon = read_shp_zip(uploaded)
         if gdf_polygon is not None:
-            st.success("SHP PKKPR berhasil dibaca")
             if DEBUG:
                 st.write("CRS :", gdf_polygon.crs)
+            try:
+                _c = gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
+                _epsg, _zone = get_utm_info(_c.x, _c.y)
+                _luas = gdf_polygon.to_crs(_epsg).area.sum() / 10000
+                info_box.success(f"SHP PKKPR berhasil dibaca | Luas : {format_angka_id(_luas)} Ha")
+            except:
+                info_box.success("SHP PKKPR berhasil dibaca")
             show_attributes(gdf_polygon, "Atribut SHP PKKPR")
 
 # ------------------
@@ -555,7 +562,13 @@ if uploaded_tapak and gdf_polygon is not None:
     gdf_tapak = read_shp_zip(uploaded_tapak)
     if gdf_tapak is not None:
         gdf_tapak = fix_geometry(gdf_tapak)
-        tapak_info.success("SHP Tapak berhasil dibaca")
+        try:
+            _c = gdf_tapak.to_crs(4326).geometry.centroid.iloc[0]
+            _epsg, _zone = get_utm_info(_c.x, _c.y)
+            _luas = gdf_tapak.to_crs(_epsg).area.sum() / 10000
+            tapak_info.success(f"SHP Tapak berhasil dibaca | Luas : {format_angka_id(_luas)} Ha")
+        except:
+            tapak_info.success("SHP Tapak berhasil dibaca")
         show_attributes(gdf_tapak, "Atribut SHP Tapak")
 
 # =========================================================
