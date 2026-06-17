@@ -483,10 +483,24 @@ if uploaded:
             except:
                 r["luas_ha"] = 0
 
-        pkkpr_luas_box.success(
-            f"Jumlah PKKPR unik : {len(results)} | "
-            f"Total luas PKKPR : {format_angka_id(total_luas_ha)} Ha"
-        )
+        # Hitung luas total dengan dua proyeksi
+        try:
+            _all_polys = [make_valid(Polygon(r["coords"] if r["coords"][0] == r["coords"][-1] else r["coords"] + [r["coords"][0]])) for r in results if len(r.get("coords", [])) >= 3]
+            _gdf_all = gpd.GeoDataFrame(geometry=_all_polys, crs="EPSG:4326")
+            _c_all = _gdf_all.geometry.unary_union.centroid
+            _epsg_all, _zone_all = get_utm_info(_c_all.x, _c_all.y)
+            _luas_utm_all = _gdf_all.to_crs(_epsg_all).area.sum()
+            _luas_merc_all = _gdf_all.to_crs(3857).area.sum()
+            pkkpr_luas_box.success(
+                f"Jumlah PKKPR unik : {len(results)}\n"
+                f"UTM {_zone_all} : {format_angka_id(_luas_utm_all)} m² / {format_angka_id(_luas_utm_all/10000)} Ha\n"
+                f"Mercator : {format_angka_id(_luas_merc_all)} m² / {format_angka_id(_luas_merc_all/10000)} Ha"
+            )
+        except:
+            pkkpr_luas_box.success(
+                f"Jumlah PKKPR unik : {len(results)} | "
+                f"Total luas PKKPR : {format_angka_id(total_luas_ha)} Ha"
+            )
 
         total_polygons = []
         for r in results:
@@ -548,10 +562,22 @@ if uploaded:
                     st.write("Valid :", poly_candidate.is_valid)
                     st.write("Empty :", poly_candidate.is_empty)
 
-                info_box.success(
-                    f"Jenis koordinat : {coord_type} | "
-                    f"Polygon valid : {'Ya' if poly_candidate.is_valid else 'Tidak'}"
-                )
+                try:
+                    _c_sel = poly_candidate.centroid
+                    _epsg_sel, _zone_sel = get_utm_info(_c_sel.x, _c_sel.y)
+                    _gdf_sel = gpd.GeoDataFrame(geometry=[poly_candidate], crs="EPSG:4326")
+                    _luas_utm_sel = _gdf_sel.to_crs(_epsg_sel).area.sum()
+                    _luas_merc_sel = _gdf_sel.to_crs(3857).area.sum()
+                    info_box.success(
+                        f"Jenis koordinat : {coord_type} | Valid : {'Ya' if poly_candidate.is_valid else 'Tidak'}\n"
+                        f"UTM {_zone_sel} : {format_angka_id(_luas_utm_sel)} m² / {format_angka_id(_luas_utm_sel/10000)} Ha\n"
+                        f"Mercator : {format_angka_id(_luas_merc_sel)} m² / {format_angka_id(_luas_merc_sel/10000)} Ha"
+                    )
+                except:
+                    info_box.success(
+                        f"Jenis koordinat : {coord_type} | "
+                        f"Polygon valid : {'Ya' if poly_candidate.is_valid else 'Tidak'}"
+                    )
 
                 if not poly_candidate.is_valid:
                     try:
@@ -574,8 +600,13 @@ if uploaded:
             try:
                 _c = gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
                 _epsg, _zone = get_utm_info(_c.x, _c.y)
-                _luas_m2 = gdf_polygon.to_crs(_epsg).area.sum()
-                info_box.success(f"SHP PKKPR berhasil dibaca | Luas : {format_angka_id(_luas_m2)} m² / {format_angka_id(_luas_m2/10000)} Ha")
+                _luas_utm = gdf_polygon.to_crs(_epsg).area.sum()
+                _luas_merc = gdf_polygon.to_crs(3857).area.sum()
+                info_box.success(
+                    f"SHP PKKPR berhasil dibaca\n"
+                    f"UTM {_zone} : {format_angka_id(_luas_utm)} m² / {format_angka_id(_luas_utm/10000)} Ha\n"
+                    f"Mercator : {format_angka_id(_luas_merc)} m² / {format_angka_id(_luas_merc/10000)} Ha"
+                )
             except:
                 info_box.success("SHP PKKPR berhasil dibaca")
             show_attributes(gdf_polygon, "Atribut SHP PKKPR")
@@ -590,8 +621,13 @@ if uploaded_tapak and gdf_polygon is not None:
         try:
             _c = gdf_tapak.to_crs(4326).geometry.centroid.iloc[0]
             _epsg, _zone = get_utm_info(_c.x, _c.y)
-            _luas_m2_t = gdf_tapak.to_crs(_epsg).area.sum()
-            tapak_info.success(f"SHP Tapak berhasil dibaca | Luas : {format_angka_id(_luas_m2_t)} m² / {format_angka_id(_luas_m2_t/10000)} Ha")
+            _luas_utm_t = gdf_tapak.to_crs(_epsg).area.sum()
+            _luas_merc_t = gdf_tapak.to_crs(3857).area.sum()
+            tapak_info.success(
+                f"SHP Tapak berhasil dibaca\n"
+                f"UTM {_zone} : {format_angka_id(_luas_utm_t)} m² / {format_angka_id(_luas_utm_t/10000)} Ha\n"
+                f"Mercator : {format_angka_id(_luas_merc_t)} m² / {format_angka_id(_luas_merc_t/10000)} Ha"
+            )
         except:
             tapak_info.success("SHP Tapak berhasil dibaca")
         show_attributes(gdf_tapak, "Atribut SHP Tapak")
