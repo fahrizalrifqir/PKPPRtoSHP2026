@@ -549,8 +549,8 @@ if uploaded:
             try:
                 _c = gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
                 _epsg, _zone = get_utm_info(_c.x, _c.y)
-                _luas = gdf_polygon.to_crs(_epsg).area.sum() / 10000
-                info_box.success(f"SHP PKKPR berhasil dibaca | Luas : {format_angka_id(_luas)} Ha")
+                _luas_m2 = gdf_polygon.to_crs(_epsg).area.sum()
+                info_box.success(f"SHP PKKPR berhasil dibaca | Luas : {format_angka_id(_luas_m2)} m² / {format_angka_id(_luas_m2/10000)} Ha")
             except:
                 info_box.success("SHP PKKPR berhasil dibaca")
             show_attributes(gdf_polygon, "Atribut SHP PKKPR")
@@ -565,8 +565,8 @@ if uploaded_tapak and gdf_polygon is not None:
         try:
             _c = gdf_tapak.to_crs(4326).geometry.centroid.iloc[0]
             _epsg, _zone = get_utm_info(_c.x, _c.y)
-            _luas = gdf_tapak.to_crs(_epsg).area.sum() / 10000
-            tapak_info.success(f"SHP Tapak berhasil dibaca | Luas : {format_angka_id(_luas)} Ha")
+            _luas_m2_t = gdf_tapak.to_crs(_epsg).area.sum()
+            tapak_info.success(f"SHP Tapak berhasil dibaca | Luas : {format_angka_id(_luas_m2_t)} m² / {format_angka_id(_luas_m2_t/10000)} Ha")
         except:
             tapak_info.success("SHP Tapak berhasil dibaca")
         show_attributes(gdf_tapak, "Atribut SHP Tapak")
@@ -589,9 +589,9 @@ if gdf_polygon is not None and coord_type == "WGS84" and gdf_tapak is not None:
     luas_luar = max(0, luas_tapak - luas_overlap)
 
     col_a, col_b, col_c = st.columns(3)
-    col_a.metric(f"Luas Tapak (UTM {utm_zone})", f"{format_angka_id(luas_tapak/10000)} Ha")
-    col_b.metric("Luas Overlay", f"{format_angka_id(luas_overlap/10000)} Ha")
-    col_c.metric("Luas di luar PKKPR", f"{format_angka_id(luas_luar/10000)} Ha")
+    col_a.metric(f"Luas Tapak (UTM {utm_zone})", f"{format_angka_id(luas_tapak/10000)} Ha", f"{format_angka_id(luas_tapak)} m²")
+    col_b.metric("Luas Overlay", f"{format_angka_id(luas_overlap/10000)} Ha", f"{format_angka_id(luas_overlap)} m²")
+    col_c.metric("Luas di luar PKKPR", f"{format_angka_id(luas_luar/10000)} Ha", f"{format_angka_id(luas_luar)} m²")
 
     st.markdown("---")
 
@@ -672,11 +672,6 @@ if gdf_polygon is not None and coord_type == "WGS84":
         st.write("**SHP PKKPR**")
         geom = gdf_polygon.to_crs(4326).geometry.iloc[0]
         if geom is not None and not geom.is_empty:
-            centroid_e = geom.centroid
-            utm_epsg_e, utm_zone_e = get_utm_info(centroid_e.x, centroid_e.y)
-            luas_utm = gdf_polygon.to_crs(utm_epsg_e).area.sum()
-            st.write(f"Luas (UTM {utm_zone_e}) : {format_angka_id(luas_utm)} m² / {format_angka_id(luas_utm/10000)} Ha")
-
             zip_bytes = save_shapefile_layers(gdf_polygon, gdf_points)
             st.download_button(
                 "⬇️ Download SHP PKKPR",
