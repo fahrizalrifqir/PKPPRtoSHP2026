@@ -516,35 +516,20 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
         coords_with_no = []
 
         for _, row in df.iterrows():
-
-    try:
-
-        x_raw = str(row.get(x_col)).strip()
-        y_raw = str(row.get(y_col)).strip()
-
-        x = parse_any_coordinate(x_raw)
-        y = parse_any_coordinate(y_raw)
-
-        if x is None or y is None:
-
-            # fallback ambil angka dari seluruh baris
-            row_text = " ".join(
-                [str(v) for v in row.tolist()]
-            )
-
-            nums = re.findall(
-                r'[-+]?\d+\.\d+',
-                row_text
-            )
-
-            if len(nums) >= 2:
-
-                x = float(nums[-2])
-                y = float(nums[-1])
-
-        if x is None or y is None:
-            continue
-
+        
+            try:
+        
+                x = parse_any_coordinate(
+                    row.get(x_col)
+                )
+        
+                y = parse_any_coordinate(
+                    row.get(y_col)
+                )
+        
+                if x is None or y is None:
+                    continue
+        
                 try:
                     no = int(
                         str(
@@ -553,16 +538,18 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
                     )
                 except:
                     no = 999999
-
+        
                 xy = normalize_lon_lat(x, y)
-
+        
                 if xy:
                     coords_with_no.append(
                         (no, xy)
                     )
-
+        
             except:
                 continue
+
+st.write("Jumlah titik tabel:", len(coords_with_no))
 
         st.write("Jumlah titik tabel:", len(coords_with_no))
 
