@@ -11,7 +11,6 @@ import pdfplumber
 import folium
 import contextily as ctx
 import xyzservices.providers as xyz
-import matplotlib.subplots as plt
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
