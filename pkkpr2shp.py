@@ -549,8 +549,6 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
             except:
                 continue
 
-st.write("Jumlah titik tabel:", len(coords_with_no))
-
         st.write("Jumlah titik tabel:", len(coords_with_no))
 
         if len(coords_with_no) >= 3:
