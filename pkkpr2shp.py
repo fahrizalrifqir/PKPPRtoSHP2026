@@ -553,42 +553,43 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
 
         if len(coords_with_no) >= 3:
         
-
-
-    if len(coords_with_no) >= 3:
-
-        coords_with_no.sort(
-            key=lambda x: x[0]
-        )
-    
-        coords = [
-            xy
-            for _, xy in coords_with_no
-        ]
-    
-        coord_type = detect_coordinate_type(
-            coords
-        )
-    
-        if coord_type == "TM3":
-            continue
-    
-        coord_signature = tuple(
-            (round(x, 8), round(y, 8))
-            for x, y in coords
-        )
-    
-        if coord_signature not in seen_coords:
-    
-            seen_coords.add(coord_signature)
-    
-            all_results.append(
-                {
-                    "coords": coords,
-                    "coord_type": coord_type,
-                    "page": item["page"]
-                }
+            coords_with_no.sort(
+                key=lambda x: x[0]
             )
+        
+            coords = [
+                xy
+                for _, xy in coords_with_no
+            ]
+        
+            coord_type = detect_coordinate_type(
+                coords
+            )
+        
+            if coord_type == "TM3":
+                continue
+        
+            coord_signature = tuple(
+                (round(x, 8), round(y, 8))
+                for x, y in coords
+            )
+        
+            if coord_signature not in seen_coords:
+        
+                seen_coords.add(coord_signature)
+        
+                all_results.append(
+                    {
+                        "coords": coords,
+                        "coord_type": coord_type,
+                        "page": item["page"]
+                    }
+                )
+        
+
+    if len(all_results) > 0:
+    return all_results
+    
                 
     # =================================================
     # FALLBACK TEXT PARSER
