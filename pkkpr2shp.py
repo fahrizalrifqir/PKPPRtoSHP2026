@@ -461,9 +461,7 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
 
     all_results = []
     seen_coords = set()
-    all_coords_global = []
-    all_no_global = []
-    
+
     for item in candidate_tables:
 
         table = item["table"]
@@ -555,35 +553,42 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
 
         if len(coords_with_no) >= 3:
         
-            all_no_global.extend(coords_with_no)
 
-    if len(all_no_global) > 0:
 
-        all_no_global.sort(
+    if len(coords_with_no) >= 3:
+
+        coords_with_no.sort(
             key=lambda x: x[0]
         )
     
-        coords = []
+        coords = [
+            xy
+            for _, xy in coords_with_no
+        ]
     
-        nomor_terakhir = None
+        coord_type = detect_coordinate_type(
+            coords
+        )
     
-        for no, xy in all_no_global:
+        if coord_type == "TM3":
+            continue
     
-            if nomor_terakhir == no:
-                continue
+        coord_signature = tuple(
+            (round(x, 8), round(y, 8))
+            for x, y in coords
+        )
     
-            coords.append(xy)
-            nomor_terakhir = no
+        if coord_signature not in seen_coords:
     
-        coord_type = detect_coordinate_type(coords)
+            seen_coords.add(coord_signature)
     
-        all_results = [{
-            "coords": coords,
-            "coord_type": coord_type,
-            "page": 0
-        }]
-    
-        return all_results
+            all_results.append(
+                {
+                    "coords": coords,
+                    "coord_type": coord_type,
+                    "page": item["page"]
+                }
+            )
                 
     # =================================================
     # FALLBACK TEXT PARSER
@@ -704,6 +709,13 @@ if uploaded:
             uploaded
         )
 
+        st.write("Jumlah hasil:", len(results))
+
+        for i, r in enumerate(results):
+            st.write(
+                f"PKKPR {i+1}",
+                len(r["coords"])
+            )
         total_luas_ha = 0
 
         for r in results:
