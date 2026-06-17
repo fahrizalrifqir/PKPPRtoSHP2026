@@ -517,18 +517,33 @@ def extract_tables_and_coords_from_pdf(uploaded_file):
 
         for _, row in df.iterrows():
 
-            try:
+    try:
 
-                x = parse_any_coordinate(
-                    row.get(x_col)
-                )
+        x_raw = str(row.get(x_col)).strip()
+        y_raw = str(row.get(y_col)).strip()
 
-                y = parse_any_coordinate(
-                    row.get(y_col)
-                )
+        x = parse_any_coordinate(x_raw)
+        y = parse_any_coordinate(y_raw)
 
-                if x is None or y is None:
-                    continue
+        if x is None or y is None:
+
+            # fallback ambil angka dari seluruh baris
+            row_text = " ".join(
+                [str(v) for v in row.tolist()]
+            )
+
+            nums = re.findall(
+                r'[-+]?\d+\.\d+',
+                row_text
+            )
+
+            if len(nums) >= 2:
+
+                x = float(nums[-2])
+                y = float(nums[-1])
+
+        if x is None or y is None:
+            continue
 
                 try:
                     no = int(
