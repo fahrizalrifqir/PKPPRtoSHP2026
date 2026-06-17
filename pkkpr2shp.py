@@ -910,7 +910,17 @@ if (
     gdf_polygon is not None
     and coord_type == "WGS84"
 ):
-    centroid = gdf_polygon.to_crs(4326).geometry.centroid.iloc[0]
+    geom = gdf_polygon.to_crs(4326).geometry.iloc[0]
+
+    if geom is None or geom.is_empty:
+        st.error("Geometry kosong")
+        st.stop()
+    
+    centroid = geom.centroid
+    
+    if centroid.is_empty:
+        st.error("Centroid kosong")
+        st.stop()
 
     utm_epsg, utm_zone = get_utm_info(
         centroid.x,
